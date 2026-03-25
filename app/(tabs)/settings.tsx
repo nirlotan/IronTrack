@@ -1,12 +1,12 @@
 import { View, Text, ScrollView, StyleSheet, TouchableOpacity, TextInput } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useTheme } from '../../src/theme';
+import { useTheme, ScreenBackground } from '../../src/theme';
 import { useTranslation } from '../../src/i18n';
 import { useAppStore } from '../../src/store/appStore';
 
 export default function SettingsScreen() {
   const { colors } = useTheme();
-  const { t, isRTL } = useTranslation();
+  const { t, isRTL, fontBold } = useTranslation();
   const insets = useSafeAreaInsets();
 
   const language = useAppStore((s) => s.language);
@@ -17,9 +17,9 @@ export default function SettingsScreen() {
   const setRestTimerSeconds = useAppStore((s) => s.setRestTimerSeconds);
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.surface }]}>
+    <ScreenBackground style={styles.container}>
       <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
-        <Text style={[styles.headerTitle, { color: colors.primary, textAlign: isRTL ? 'right' : 'left' }]}>
+        <Text style={[styles.headerTitle, { color: colors.primary, textAlign: isRTL ? 'right' : 'left', fontFamily: fontBold }]}>
           {t('settings_title')}
         </Text>
       </View>
@@ -155,11 +155,12 @@ export default function SettingsScreen() {
 
         {/* App Info */}
         <View style={[styles.infoBox, { backgroundColor: colors.surfaceContainerLow }]}>
-          <Text style={[styles.infoTitle, { color: colors.primary }]}>IronTrack</Text>
-          <Text style={[styles.infoVersion, { color: colors.outlineVariant }]}>v1.0.0 MVP</Text>
+          <Text style={[styles.infoTitle, { color: colors.primary }]}>IRONTRACK</Text>
+          <Text style={[styles.infoBy, { color: colors.onSurfaceVariant }]}>by Yahav Lotan</Text>
+          <Text style={[styles.infoVersion, { color: colors.outlineVariant }]}>v1.0.0</Text>
         </View>
       </ScrollView>
-    </View>
+    </ScreenBackground>
   );
 }
 
@@ -183,7 +184,7 @@ const styles = StyleSheet.create({
   optionRow: { flexDirection: 'row', gap: 10 },
   optionBtn: {
     flex: 1,
-    borderRadius: 12,
+    borderRadius: 8,
     paddingVertical: 16,
     alignItems: 'center',
   },
@@ -193,7 +194,7 @@ const styles = StyleSheet.create({
   },
   timerRow: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
   timerBtn: {
-    borderRadius: 12,
+    borderRadius: 8,
     paddingVertical: 14,
     paddingHorizontal: 18,
     minWidth: 60,
@@ -213,10 +214,16 @@ const styles = StyleSheet.create({
     fontFamily: 'SpaceGrotesk_700Bold',
     fontSize: 20,
     textTransform: 'uppercase',
+    letterSpacing: 2,
+  },
+  infoBy: {
+    fontFamily: 'Manrope_400Regular',
+    fontSize: 13,
+    marginTop: 4,
   },
   infoVersion: {
     fontFamily: 'Manrope_400Regular',
     fontSize: 12,
-    marginTop: 4,
+    marginTop: 2,
   },
 });

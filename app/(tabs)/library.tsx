@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -8,17 +8,29 @@ import {
   TouchableOpacity,
   Modal,
 } from 'react-native';
+import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useTheme } from '../../src/theme';
+import { useTheme, ScreenBackground } from '../../src/theme';
 import { useTranslation } from '../../src/i18n';
 import { useAppStore } from '../../src/store/appStore';
 import { bodyPartKeys, bodyPartNameKeys } from '../../src/data/exercises';
 import { getExerciseName } from '../../src/utils/helpers';
 import type { BodyPart } from '../../src/types';
 
+const BODY_PART_ICON: Record<BodyPart, React.ComponentProps<typeof MaterialIcons>['name']> = {
+  chest: 'fitness-center',
+  back: 'rowing',
+  legs: 'directions-run',
+  shoulders: 'accessibility-new',
+  arms: 'sports-handball',
+  core: 'self-improvement',
+  cardio: 'favorite',
+  other: 'category',
+};
+
 export default function LibraryScreen() {
   const { colors } = useTheme();
-  const { t, isRTL, language } = useTranslation();
+  const { t, isRTL, language, fontBold, fontRegular } = useTranslation();
   const insets = useSafeAreaInsets();
   const [search, setSearch] = useState('');
   const [showModal, setShowModal] = useState(false);
@@ -48,10 +60,10 @@ export default function LibraryScreen() {
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.surface }]}>
+    <ScreenBackground style={styles.container}>
       {/* Header */}
       <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
-        <Text style={[styles.headerTitle, { color: colors.primary, textAlign: isRTL ? 'right' : 'left' }]}>
+        <Text style={[styles.headerTitle, { color: colors.primary, textAlign: isRTL ? 'right' : 'left', fontFamily: fontBold }]}>
           {t('library_title')}
         </Text>
       </View>
@@ -63,9 +75,9 @@ export default function LibraryScreen() {
       >
         {/* Search */}
         <View style={[styles.searchBox, { backgroundColor: colors.surfaceContainerLow, flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
-          <Text style={[styles.searchIcon, { color: colors.outlineVariant, marginRight: isRTL ? 0 : 10, marginLeft: isRTL ? 10 : 0 }]}>🔍</Text>
+          <MaterialIcons name="search" size={18} color={colors.outlineVariant} style={{ marginRight: isRTL ? 0 : 10, marginLeft: isRTL ? 10 : 0 }} />
           <TextInput
-            style={[styles.searchInput, { color: colors.onSurface, textAlign: isRTL ? 'right' : 'left' }]}
+            style={[styles.searchInput, { color: colors.onSurface, textAlign: isRTL ? 'right' : 'left', fontFamily: fontRegular }]}
             placeholder={t('library_search')}
             placeholderTextColor={colors.outlineVariant}
             value={search}
@@ -75,12 +87,12 @@ export default function LibraryScreen() {
 
         {/* Add Custom Exercise Button — first in list */}
         <TouchableOpacity
-          style={[styles.customBtn, { backgroundColor: colors.surfaceContainerHighest }]}
+          style={[styles.customBtn, { backgroundColor: colors.primaryContainer }]}
           onPress={() => setShowModal(true)}
           activeOpacity={0.8}
         >
-          <Text style={[styles.customBtnIcon, { color: colors.primary }]}>⊕</Text>
-          <Text style={[styles.customBtnText, { color: colors.primary }]}>
+          <MaterialIcons name="add-circle-outline" size={20} color={colors.onPrimaryContainer} />
+          <Text style={[styles.customBtnText, { color: colors.onPrimaryContainer, fontFamily: fontBold }]}>
             {t('add_custom_exercise')}
           </Text>
         </TouchableOpacity>
@@ -89,10 +101,13 @@ export default function LibraryScreen() {
         {grouped.map((group) => (
           <View key={group.bodyPart} style={styles.group}>
             <View style={[styles.groupHeader, { borderBottomColor: colors.outlineVariant + '25', flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
-              <Text style={[styles.groupTitle, { color: colors.onBackground }]}>
-                {group.label}
-              </Text>
-              <Text style={[styles.groupCount, { color: colors.primary + '99' }]}>
+              <View style={{ flexDirection: isRTL ? 'row-reverse' : 'row', alignItems: 'center', gap: 8 }}>
+                <MaterialIcons name={BODY_PART_ICON[group.bodyPart]} size={16} color={colors.primary} />
+                <Text style={[styles.groupTitle, { color: colors.onBackground, fontFamily: fontBold }]}>
+                  {group.label}
+                </Text>
+              </View>
+              <Text style={[styles.groupCount, { color: colors.primary + '99', fontFamily: fontBold }]}>
                 {group.items.length} {t('exercises_count')}
               </Text>
             </View>
@@ -102,15 +117,17 @@ export default function LibraryScreen() {
                 style={[styles.exerciseRow, { backgroundColor: colors.surfaceContainerLow, flexDirection: isRTL ? 'row-reverse' : 'row' }]}
               >
                 <View style={[styles.exerciseIcon, { backgroundColor: colors.surfaceContainerHighest, marginRight: isRTL ? 0 : 12, marginLeft: isRTL ? 12 : 0 }]}>
-                  <Text style={[styles.exerciseIconText, { color: colors.primaryDim }]}>
-                    {exercise.isCustom ? '★' : '◆'}
-                  </Text>
+                  <MaterialIcons
+                    name={exercise.isCustom ? 'star' : BODY_PART_ICON[exercise.bodyPart]}
+                    size={18}
+                    color={colors.primary}
+                  />
                 </View>
                 <View style={styles.exerciseInfo}>
-                  <Text style={[styles.exerciseName, { color: colors.onSurface, textAlign: isRTL ? 'right' : 'left' }]}>
+                  <Text style={[styles.exerciseName, { color: colors.onSurface, textAlign: isRTL ? 'right' : 'left', fontFamily: fontBold }]}>
                     {getExerciseName(exercise, t, language)}
                   </Text>
-                  <Text style={[styles.exerciseMeta, { color: colors.onSurfaceVariant, textAlign: isRTL ? 'right' : 'left' }]}>
+                  <Text style={[styles.exerciseMeta, { color: colors.onSurfaceVariant, textAlign: isRTL ? 'right' : 'left', fontFamily: fontRegular }]}>
                     {exercise.isCustom ? t('custom_exercise') : t(bodyPartNameKeys[exercise.bodyPart] as any)}
                   </Text>
                 </View>
@@ -124,7 +141,7 @@ export default function LibraryScreen() {
       <Modal visible={showModal} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
           <View style={[styles.modalContent, { backgroundColor: colors.surfaceContainer }]}>
-            <Text style={[styles.modalTitle, { color: colors.onSurface, textAlign: isRTL ? 'right' : 'left' }]}>
+            <Text style={[styles.modalTitle, { color: colors.onSurface, textAlign: isRTL ? 'right' : 'left', fontFamily: fontBold }]}>
               {t('add_custom_exercise')}
             </Text>
 
@@ -138,7 +155,7 @@ export default function LibraryScreen() {
               autoFocus
             />
 
-            <Text style={[styles.modalLabel, { color: colors.onSurfaceVariant, textAlign: isRTL ? 'right' : 'left' }]}>
+            <Text style={[styles.modalLabel, { color: colors.onSurfaceVariant, textAlign: isRTL ? 'right' : 'left', fontFamily: fontBold }]}>
               {t('body_part')}
             </Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipRow}>
@@ -174,19 +191,19 @@ export default function LibraryScreen() {
                 style={[styles.modalBtn, { backgroundColor: colors.surfaceContainerHighest }]}
                 onPress={() => setShowModal(false)}
               >
-                <Text style={[styles.modalBtnText, { color: colors.onSurface }]}>{t('cancel')}</Text>
+                <Text style={[styles.modalBtnText, { color: colors.onSurface, fontFamily: fontBold }]}>{t('cancel')}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.modalBtn, { backgroundColor: colors.primaryContainer }]}
                 onPress={handleAddCustom}
               >
-                <Text style={[styles.modalBtnText, { color: colors.onPrimaryContainer }]}>{t('save')}</Text>
+                <Text style={[styles.modalBtnText, { color: '#ffffff', fontFamily: fontBold }]}>{t('save')}</Text>
               </TouchableOpacity>
             </View>
           </View>
         </View>
       </Modal>
-    </View>
+    </ScreenBackground>
   );
 }
 
@@ -195,7 +212,7 @@ const styles = StyleSheet.create({
   header: { paddingHorizontal: 24, paddingBottom: 12 },
   headerTitle: {
     fontFamily: 'SpaceGrotesk_700Bold',
-    fontSize: 26,
+    fontSize: 28,
     textTransform: 'uppercase',
     letterSpacing: -0.5,
   },
@@ -203,12 +220,11 @@ const styles = StyleSheet.create({
   searchBox: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: 12,
+    borderRadius: 8,
     paddingHorizontal: 16,
     paddingVertical: 14,
     marginBottom: 16,
   },
-  searchIcon: { fontSize: 16 },
   searchInput: {
     flex: 1,
     fontSize: 14,
@@ -218,12 +234,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 12,
+    borderRadius: 8,
     paddingVertical: 18,
     gap: 8,
     marginBottom: 24,
+    borderWidth: 1.5,
+    borderColor: 'rgba(0,0,0,0)',
   },
-  customBtnIcon: { fontSize: 20 },
   customBtnText: {
     fontFamily: 'SpaceGrotesk_700Bold',
     fontSize: 13,
@@ -254,7 +271,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     padding: 14,
-    borderRadius: 12,
+    borderRadius: 10,
     marginBottom: 6,
   },
   exerciseIcon: {
@@ -264,7 +281,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  exerciseIconText: { fontSize: 16 },
   exerciseInfo: { flex: 1 },
   exerciseName: {
     fontFamily: 'SpaceGrotesk_700Bold',
@@ -297,7 +313,7 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   modalInput: {
-    borderRadius: 12,
+    borderRadius: 8,
     padding: 16,
     fontSize: 16,
     fontFamily: 'Manrope_400Regular',
@@ -314,7 +330,7 @@ const styles = StyleSheet.create({
   chip: {
     paddingHorizontal: 16,
     paddingVertical: 10,
-    borderRadius: 20,
+    borderRadius: 10,
     marginRight: 8,
   },
   chipText: {
@@ -324,7 +340,7 @@ const styles = StyleSheet.create({
   modalActions: { flexDirection: 'row', gap: 12 },
   modalBtn: {
     flex: 1,
-    borderRadius: 12,
+    borderRadius: 8,
     paddingVertical: 16,
     alignItems: 'center',
   },

@@ -3,6 +3,12 @@ import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useFonts, SpaceGrotesk_400Regular, SpaceGrotesk_700Bold } from '@expo-google-fonts/space-grotesk';
 import { Manrope_400Regular, Manrope_700Bold } from '@expo-google-fonts/manrope';
+import {
+  Heebo_400Regular,
+  Heebo_600SemiBold,
+  Heebo_700Bold,
+  Heebo_800ExtraBold,
+} from '@expo-google-fonts/heebo';
 import * as SplashScreen from 'expo-splash-screen';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { StyleSheet } from 'react-native';
@@ -12,7 +18,7 @@ import { useAppStore } from '../src/store/appStore';
 SplashScreen.preventAutoHideAsync();
 
 function InnerLayout() {
-  const { colors, isDark } = useTheme();
+  const { isDark } = useTheme();
 
   return (
     <>
@@ -20,7 +26,7 @@ function InnerLayout() {
       <Stack
         screenOptions={{
           headerShown: false,
-          contentStyle: { backgroundColor: colors.surface },
+          contentStyle: { backgroundColor: 'transparent' },
           animation: 'slide_from_right',
         }}
       />
@@ -36,6 +42,10 @@ export default function RootLayout() {
     SpaceGrotesk_700Bold,
     Manrope_400Regular,
     Manrope_700Bold,
+    Heebo_400Regular,
+    Heebo_600SemiBold,
+    Heebo_700Bold,
+    Heebo_800ExtraBold,
   });
 
   useEffect(() => {

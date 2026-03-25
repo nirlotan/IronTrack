@@ -1,35 +1,9 @@
 import { Tabs } from 'expo-router';
 import { Platform, StyleSheet, View, Text } from 'react-native';
+import { MaterialIcons } from '@expo/vector-icons';
 import { useTheme } from '../../src/theme';
 import { useTranslation } from '../../src/i18n';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-
-function TabIcon({ icon, label, focused }: { icon: string; label: string; focused: boolean }) {
-  const { colors } = useTheme();
-  return (
-    <View style={styles.tabItem}>
-      <Text
-        style={[
-          styles.tabIcon,
-          { color: focused ? colors.primary : colors.outlineVariant },
-        ]}
-      >
-        {icon}
-      </Text>
-      <Text
-        style={[
-          styles.tabLabel,
-          {
-            color: focused ? colors.primary : colors.outlineVariant,
-            fontFamily: 'SpaceGrotesk_700Bold',
-          },
-        ]}
-      >
-        {label}
-      </Text>
-    </View>
-  );
-}
 
 export default function TabsLayout() {
   const { colors, isDark } = useTheme();
@@ -41,9 +15,9 @@ export default function TabsLayout() {
       screenOptions={{
         headerShown: false,
         tabBarStyle: {
-          backgroundColor: isDark ? 'rgba(14,14,14,0.92)' : 'rgba(246,246,246,0.92)',
-          borderTopColor: isDark ? 'rgba(72,72,71,0.15)' : 'rgba(172,173,173,0.2)',
-          borderTopWidth: StyleSheet.hairlineWidth,
+          backgroundColor: isDark ? 'rgba(14,18,14,0.94)' : 'rgba(255,255,255,0.94)',
+          borderTopColor: isDark ? 'rgba(61,90,61,0.3)' : 'rgba(34,197,94,0.2)',
+          borderTopWidth: 1,
           height: 70 + insets.bottom,
           paddingTop: 8,
           paddingBottom: insets.bottom + 4,
@@ -65,10 +39,8 @@ export default function TabsLayout() {
         name="index"
         options={{
           title: t('tab_templates'),
-          tabBarIcon: ({ focused }) => (
-            <Text style={{ fontSize: 22, color: focused ? colors.primary : colors.outlineVariant }}>
-              📋
-            </Text>
+          tabBarIcon: ({ focused, color }) => (
+            <MaterialIcons name="assignment" size={24} color={color} />
           ),
         }}
       />
@@ -76,10 +48,8 @@ export default function TabsLayout() {
         name="workout"
         options={{
           title: t('tab_workout'),
-          tabBarIcon: ({ focused }) => (
-            <Text style={{ fontSize: 22, color: focused ? colors.primary : colors.outlineVariant }}>
-              💪
-            </Text>
+          tabBarIcon: ({ focused, color }) => (
+            <MaterialIcons name="fitness-center" size={24} color={color} />
           ),
         }}
       />
@@ -87,10 +57,8 @@ export default function TabsLayout() {
         name="library"
         options={{
           title: t('tab_library'),
-          tabBarIcon: ({ focused }) => (
-            <Text style={{ fontSize: 22, color: focused ? colors.primary : colors.outlineVariant }}>
-              📚
-            </Text>
+          tabBarIcon: ({ focused, color }) => (
+            <MaterialIcons name="menu-book" size={24} color={color} />
           ),
         }}
       />
@@ -98,10 +66,9 @@ export default function TabsLayout() {
         name="history"
         options={{
           title: t('tab_history'),
-          tabBarIcon: ({ focused }) => (
-            <Text style={{ fontSize: 22, color: focused ? colors.primary : colors.outlineVariant }}>
-              📊
-            </Text>
+          href: null,
+          tabBarIcon: ({ focused, color }) => (
+            <MaterialIcons name="bar-chart" size={24} color={color} />
           ),
         }}
       />
@@ -109,10 +76,8 @@ export default function TabsLayout() {
         name="settings"
         options={{
           title: t('tab_settings'),
-          tabBarIcon: ({ focused }) => (
-            <Text style={{ fontSize: 22, color: focused ? colors.primary : colors.outlineVariant }}>
-              ⚙️
-            </Text>
+          tabBarIcon: ({ focused, color }) => (
+            <MaterialIcons name="tune" size={24} color={color} />
           ),
         }}
       />
@@ -121,13 +86,6 @@ export default function TabsLayout() {
 }
 
 const styles = StyleSheet.create({
-  tabItem: {
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  tabIcon: {
-    fontSize: 22,
-  },
   tabLabel: {
     fontSize: 9,
     marginTop: 2,
@@ -135,3 +93,5 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
   },
 });
+
+

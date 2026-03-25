@@ -7,16 +7,17 @@ import {
   TextInput,
   TouchableOpacity,
 } from 'react-native';
+import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { useTheme } from '../../src/theme';
+import { useTheme, ScreenBackground } from '../../src/theme';
 import { useTranslation } from '../../src/i18n';
 import { useAppStore } from '../../src/store/appStore';
 import { getExerciseName, formatVolume } from '../../src/utils/helpers';
 
 export default function HistoryScreen() {
-  const { colors, isDark } = useTheme();
-  const { t, isRTL, language } = useTranslation();
+  const { colors } = useTheme();
+  const { t, isRTL, language, fontBold, fontRegular } = useTranslation();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const [search, setSearch] = useState('');
@@ -40,10 +41,10 @@ export default function HistoryScreen() {
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.surface }]}>
+    <ScreenBackground style={styles.container}>
       {/* Header */}
       <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
-        <Text style={[styles.headerTitle, { color: colors.primary, textAlign: isRTL ? 'right' : 'left' }]}>
+        <Text style={[styles.headerTitle, { color: colors.primary, textAlign: isRTL ? 'right' : 'left', fontFamily: fontBold }]}>
           {t('history_title')}
         </Text>
       </View>
@@ -55,9 +56,9 @@ export default function HistoryScreen() {
       >
         {/* Search */}
         <View style={[styles.searchBox, { backgroundColor: colors.surfaceContainerLow, flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
-          <Text style={[styles.searchIcon, { color: colors.outlineVariant, marginRight: isRTL ? 0 : 10, marginLeft: isRTL ? 10 : 0 }]}>🔍</Text>
+          <MaterialIcons name="search" size={18} color={colors.outlineVariant} style={{ marginRight: isRTL ? 0 : 10, marginLeft: isRTL ? 10 : 0 }} />
           <TextInput
-            style={[styles.searchInput, { color: colors.onSurface, textAlign: isRTL ? 'right' : 'left' }]}
+            style={[styles.searchInput, { color: colors.onSurface, textAlign: isRTL ? 'right' : 'left', fontFamily: fontRegular }]}
             placeholder={t('history_search')}
             placeholderTextColor={colors.outlineVariant}
             value={search}
@@ -102,16 +103,18 @@ export default function HistoryScreen() {
                 {/* Header Row */}
                 <View style={styles.cardHeaderRow}>
                   <View style={{ flex: 1 }}>
-                    <Text style={[styles.cardTitle, { color: colors.onSurface, textAlign: isRTL ? 'right' : 'left' }]}>
+                    <Text style={[styles.cardTitle, { color: colors.onSurface, textAlign: isRTL ? 'right' : 'left', fontFamily: fontBold }]}>
                       {session.name}
                     </Text>
                     <View style={styles.metaRow}>
-                      <Text style={[styles.metaText, { color: colors.onSurfaceVariant }]}>
-                        📅 {session.date}
+                      <MaterialIcons name="calendar-today" size={12} color={colors.onSurfaceVariant} />
+                      <Text style={[styles.metaText, { color: colors.onSurfaceVariant, fontFamily: fontRegular }]}>
+                        {session.date}
                       </Text>
                       <View style={[styles.metaDot, { backgroundColor: colors.outlineVariant }]} />
-                      <Text style={[styles.metaText, { color: colors.onSurfaceVariant }]}>
-                        ⏱ {session.durationMinutes ?? 0} {t('minutes')}
+                      <MaterialIcons name="timer" size={12} color={colors.onSurfaceVariant} />
+                      <Text style={[styles.metaText, { color: colors.onSurfaceVariant, fontFamily: fontRegular }]}>
+                        {session.durationMinutes ?? 0} {t('minutes')}
                       </Text>
                     </View>
                   </View>
@@ -144,12 +147,13 @@ export default function HistoryScreen() {
 
                 {/* Repeat Button */}
                 <TouchableOpacity
-                  style={[styles.repeatBtn, isDark ? { backgroundColor: colors.primaryContainer } : { backgroundColor: colors.secondaryContainer }]}
+                  style={[styles.repeatBtn, { backgroundColor: colors.primaryContainer }]}
                   onPress={() => handleRepeat(session.id)}
                   activeOpacity={0.8}
                 >
-                  <Text style={[styles.repeatBtnText, isDark ? { color: colors.onPrimaryContainer } : { color: colors.onSecondaryContainer }]}>
-                    🔄 {t('repeat_workout')}
+                  <MaterialIcons name="replay" size={16} color={colors.onPrimaryContainer} />
+                  <Text style={[styles.repeatBtnText, { color: colors.onPrimaryContainer, fontFamily: fontBold }]}>
+                    {t('repeat_workout')}
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -157,7 +161,7 @@ export default function HistoryScreen() {
           );
         })}
       </ScrollView>
-    </View>
+    </ScreenBackground>
   );
 }
 
@@ -174,12 +178,11 @@ const styles = StyleSheet.create({
   searchBox: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: 12,
+    borderRadius: 8,
     paddingHorizontal: 16,
     paddingVertical: 14,
     marginBottom: 20,
   },
-  searchIcon: { fontSize: 16 },
   searchInput: {
     flex: 1,
     fontSize: 14,
@@ -268,9 +271,12 @@ const styles = StyleSheet.create({
     fontSize: 11,
   },
   repeatBtn: {
-    borderRadius: 12,
-    paddingVertical: 16,
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    borderRadius: 8,
+    paddingVertical: 16,
   },
   repeatBtnText: {
     fontFamily: 'SpaceGrotesk_700Bold',

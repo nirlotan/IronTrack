@@ -16,6 +16,37 @@ import type {
 
 type ThemeMode = 'dark' | 'light' | 'system';
 
+const defaultTemplates: WorkoutTemplate[] = [
+  {
+    id: 'tpl_push_day',
+    name: 'Push Day',
+    exercises: [
+      { exerciseId: 'ex_bench_press',     targetSets: 4, targetReps: 8  },
+      { exerciseId: 'ex_incline_bench',   targetSets: 3, targetReps: 10 },
+      { exerciseId: 'ex_overhead_press',  targetSets: 3, targetReps: 10 },
+      { exerciseId: 'ex_lateral_raise',   targetSets: 3, targetReps: 15 },
+      { exerciseId: 'ex_tricep_pushdown', targetSets: 3, targetReps: 12 },
+      { exerciseId: 'ex_cable_fly',       targetSets: 3, targetReps: 12 },
+    ],
+    createdAt: 0,
+    updatedAt: 0,
+  },
+  {
+    id: 'tpl_pull_legs',
+    name: 'Pull & Legs',
+    exercises: [
+      { exerciseId: 'ex_deadlift',             targetSets: 4, targetReps: 5  },
+      { exerciseId: 'ex_lat_pulldown',         targetSets: 4, targetReps: 10 },
+      { exerciseId: 'ex_barbell_row',          targetSets: 3, targetReps: 8  },
+      { exerciseId: 'ex_squat',                targetSets: 4, targetReps: 6  },
+      { exerciseId: 'ex_romanian_deadlift',    targetSets: 3, targetReps: 10 },
+      { exerciseId: 'ex_barbell_curl',         targetSets: 3, targetReps: 12 },
+    ],
+    createdAt: 0,
+    updatedAt: 0,
+  },
+];
+
 interface AppState {
   language: 'en' | 'he';
   themeMode: ThemeMode;
@@ -73,7 +104,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   themeMode: 'dark',
   restTimerSeconds: 90,
   exercises: defaultExercises,
-  templates: [],
+  templates: defaultTemplates,
   sessions: [],
   activeWorkout: null,
 
@@ -342,7 +373,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     const theme = getJSON<ThemeMode>(KEYS.theme);
     const restTimer = getJSON<number>(KEYS.restTimer);
     const customExercises = getJSON<Exercise[]>(KEYS.exercises) ?? [];
-    const templates = getJSON<WorkoutTemplate[]>(KEYS.templates) ?? [];
+    const templates = getJSON<WorkoutTemplate[]>(KEYS.templates) ?? defaultTemplates;
     const sessions = getJSON<WorkoutSession[]>(KEYS.sessions) ?? [];
     const activeWorkout = getJSON<ActiveWorkout>(KEYS.activeWorkout);
 

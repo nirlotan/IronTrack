@@ -9,15 +9,16 @@ import {
   Alert,
   I18nManager,
 } from 'react-native';
+import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { useTheme } from '../../src/theme';
+import { useTheme, ScreenBackground } from '../../src/theme';
 import { useTranslation } from '../../src/i18n';
 import { useAppStore } from '../../src/store/appStore';
 
 export default function TemplatesScreen() {
   const { colors, isDark } = useTheme();
-  const { t, isRTL } = useTranslation();
+  const { t, isRTL, fontBold, fontRegular } = useTranslation();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const [search, setSearch] = useState('');
@@ -43,10 +44,10 @@ export default function TemplatesScreen() {
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.surface }]}>
+    <ScreenBackground style={styles.container}>
       {/* Header */}
-      <View style={[styles.header, { paddingTop: insets.top + 12, backgroundColor: colors.surface }]}>
-        <Text style={[styles.headerTitle, { color: colors.primary, textAlign: isRTL ? 'right' : 'left' }]}>
+      <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
+        <Text style={[styles.headerTitle, { color: colors.primary, textAlign: isRTL ? 'right' : 'left', fontFamily: fontBold }]}>
           {t('templates_title')}
         </Text>
       </View>
@@ -58,13 +59,13 @@ export default function TemplatesScreen() {
       >
         {/* Search */}
         <View style={[styles.searchContainer, { backgroundColor: colors.surfaceContainerLow, flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
-          <Text style={[styles.searchIcon, { color: colors.outlineVariant, marginRight: isRTL ? 0 : 10, marginLeft: isRTL ? 10 : 0 }]}>🔍</Text>
+          <MaterialIcons name="search" size={18} color={colors.outlineVariant} style={{ marginRight: isRTL ? 0 : 10, marginLeft: isRTL ? 10 : 0 }} />
           <TextInput
             style={[
               styles.searchInput,
               {
                 color: colors.onSurface,
-                fontFamily: 'SpaceGrotesk_400Regular',
+                fontFamily: fontRegular,
                 textAlign: isRTL ? 'right' : 'left',
               },
             ]}
@@ -81,7 +82,7 @@ export default function TemplatesScreen() {
           onPress={() => router.push('/create-template')}
           activeOpacity={0.8}
         >
-          <Text style={[styles.createBtnText, { color: colors.onPrimaryContainer }]}>
+          <Text style={[styles.createBtnText, { color: colors.onPrimaryContainer, fontFamily: fontBold }]}>
             + {t('create_template')}
           </Text>
         </TouchableOpacity>
@@ -113,40 +114,40 @@ export default function TemplatesScreen() {
                 {/* Card Header with edit */}
                 <View style={styles.cardHeader}>
                   <TouchableOpacity onPress={() => router.push(`/edit-template?id=${template.id}`)}>
-                    <Text style={[styles.cardMoreIcon, { color: colors.outlineVariant }]}>⋯</Text>
+                    <MaterialIcons name="more-horiz" size={28} color={colors.outlineVariant} />
                   </TouchableOpacity>
                 </View>
 
                 {/* Template Name */}
-                <Text style={[styles.cardTitle, { color: colors.onSurface, textAlign: isRTL ? 'right' : 'left' }]}>
+                <Text style={[styles.cardTitle, { color: colors.onSurface, textAlign: isRTL ? 'right' : 'left', fontFamily: fontBold }]}>
                   {template.name}
                 </Text>
 
                 {/* Stats Row */}
                 <View style={[styles.statsRow, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
                   <View style={styles.statItem}>
-                    <Text style={[styles.statLabel, { color: colors.outlineVariant, textAlign: isRTL ? 'right' : 'left' }]}>
+                    <Text style={[styles.statLabel, { color: colors.outlineVariant, textAlign: isRTL ? 'right' : 'left', fontFamily: fontBold }]}>
                       {t('template_exercises')}
                     </Text>
-                    <Text style={[styles.statValue, { color: colors.onSurface, textAlign: isRTL ? 'right' : 'left' }]}>
+                    <Text style={[styles.statValue, { color: colors.onSurface, textAlign: isRTL ? 'right' : 'left', fontFamily: fontBold }]}>
                       {template.exercises.length}
                     </Text>
                   </View>
                   <View style={styles.statItem}>
-                    <Text style={[styles.statLabel, { color: colors.outlineVariant, textAlign: isRTL ? 'right' : 'left' }]}>
+                    <Text style={[styles.statLabel, { color: colors.outlineVariant, textAlign: isRTL ? 'right' : 'left', fontFamily: fontBold }]}>
                       {t('template_total_sets')}
                     </Text>
-                    <Text style={[styles.statValue, { color: colors.onSurface, textAlign: isRTL ? 'right' : 'left' }]}>
+                    <Text style={[styles.statValue, { color: colors.onSurface, textAlign: isRTL ? 'right' : 'left', fontFamily: fontBold }]}>
                       {totalSets}
                     </Text>
                   </View>
 
                   {/* Play Button */}
                   <TouchableOpacity
-                    style={[styles.playBtn, { backgroundColor: colors.surfaceContainerHighest }]}
+                    style={[styles.playBtn, { backgroundColor: colors.primaryContainer }]}
                     onPress={() => handleStart(template.id)}
                   >
-                    <Text style={[styles.playIcon, { color: colors.primary }]}>▶</Text>
+                    <MaterialIcons name="play-arrow" size={26} color={colors.onPrimaryContainer} />
                   </TouchableOpacity>
                 </View>
               </View>
@@ -154,7 +155,7 @@ export default function TemplatesScreen() {
           );
         })}
       </ScrollView>
-    </View>
+    </ScreenBackground>
   );
 }
 
@@ -175,7 +176,7 @@ const styles = StyleSheet.create({
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: 12,
+    borderRadius: 8,
     paddingHorizontal: 16,
     paddingVertical: 14,
     marginBottom: 16,
@@ -187,7 +188,7 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
   },
   createBtn: {
-    borderRadius: 12,
+    borderRadius: 8,
     paddingVertical: 18,
     alignItems: 'center',
     marginBottom: 24,
@@ -207,7 +208,7 @@ const styles = StyleSheet.create({
     fontSize: 15,
   },
   card: {
-    borderRadius: 12,
+    borderRadius: 10,
     padding: 24,
     marginBottom: 16,
     overflow: 'hidden',

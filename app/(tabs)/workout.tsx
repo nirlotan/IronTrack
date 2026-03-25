@@ -7,26 +7,28 @@ import {
   TextInput,
   TouchableOpacity,
   Alert,
-  Keyboard,
 } from 'react-native';
+import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
-import { useTheme } from '../../src/theme';
+import { useTheme, ScreenBackground } from '../../src/theme';
 import { useTranslation } from '../../src/i18n';
 import { useAppStore } from '../../src/store/appStore';
-import { getExerciseName, formatTimer } from '../../src/utils/helpers';
+import { getExerciseName, formatTimer, formatVolume } from '../../src/utils/helpers';
 
 export default function WorkoutScreen() {
-  const { colors, isDark } = useTheme();
-  const { t, isRTL, language } = useTranslation();
+  const { colors } = useTheme();
+  const { t, isRTL, language, fontBold, fontRegular } = useTranslation();
   const insets = useSafeAreaInsets();
   const router = useRouter();
 
   const activeWorkout = useAppStore((s) => s.activeWorkout);
   const exercises = useAppStore((s) => s.exercises);
+  const sessions = useAppStore((s) => s.sessions);
   const restTimerSeconds = useAppStore((s) => s.restTimerSeconds);
   const startEmptyWorkout = useAppStore((s) => s.startEmptyWorkout);
+  const startWorkoutFromSession = useAppStore((s) => s.startWorkoutFromSession);
   const renameActiveWorkout = useAppStore((s) => s.renameActiveWorkout);
   const updateSet = useAppStore((s) => s.updateSet);
   const toggleSetComplete = useAppStore((s) => s.toggleSetComplete);
@@ -34,6 +36,8 @@ export default function WorkoutScreen() {
   const finishWorkout = useAppStore((s) => s.finishWorkout);
   const discardWorkout = useAppStore((s) => s.discardWorkout);
   const getLastSessionForExercise = useAppStore((s) => s.getLastSessionForExercise);
+
+  const [search, setSearch] = useState('');
 
   // Rest timer
   const [restTimeLeft, setRestTimeLeft] = useState(0);
@@ -104,45 +108,166 @@ export default function WorkoutScreen() {
     ]);
   };
 
-  // No active workout — show start screen
+  const handleRepeat = (sessionId: string) => {
+    startWorkoutFromSession(sessionId);
+  };
+
+  const getExName = (id: string) => {
+    const ex = exercises.find((e) => e.id === id);
+    return ex ? getExerciseName(ex, t, language) : id;
+  };
+
+  // ── No active workout: combined start + history screen ──────────────────────
   if (!activeWorkout) {
+    const filtered = sessions.filter((s) =>
+      s.name.toLowerCase().includes(search.toLowerCase())
+    );
+
     return (
-      <View style={[styles.container, { backgroundColor: colors.surface }]}>
+      <ScreenBackground style={styles.container}>
+        {/* Header */}
         <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
-          <Text style={[styles.headerTitle, { color: colors.primary, textAlign: isRTL ? 'right' : 'left' }]}>
+          <Text style={[styles.headerTitle, { color: colors.primary, textAlign: isRTL ? 'right' : 'left', fontFamily: fontBold }]}>
             {t('tab_workout')}
           </Text>
         </View>
-        <View style={styles.emptyCenter}>
+
+        <ScrollView
+          style={styles.scroll}
+          contentContainerStyle={{ paddingBottom: 120, paddingHorizontal: 24 }}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
+          {/* New Workout Button */}
           <TouchableOpacity
             style={[styles.startBtn, { backgroundColor: colors.primaryContainer }]}
             onPress={startEmptyWorkout}
             activeOpacity={0.8}
           >
-            <Text style={[styles.startBtnText, { color: colors.onPrimaryContainer }]}>
-              + {t('new_workout')}
+            <MaterialIcons name="add" size={22} color={colors.onPrimaryContainer} />
+            <Text style={[styles.startBtnText, { color: colors.onPrimaryContainer, fontFamily: fontBold }]}>
+              {t('new_workout')}
             </Text>
           </TouchableOpacity>
-        </View>
-      </View>
+
+          {/* Search past workouts */}
+          <View style={[styles.searchBox, { backgroundColor: colors.surfaceContainerLow, flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
+            <MaterialIcons name="search" size={18} color={colors.outlineVariant} style={{ marginRight: isRTL ? 0 : 10, marginLeft: isRTL ? 10 : 0 }} />
+            <TextInput
+              style={[styles.searchInput, { color: colors.onSurface, textAlign: isRTL ? 'right' : 'left', fontFamily: fontRegular }]}
+              placeholder={t('history_search')}
+              placeholderTextColor={colors.outlineVariant}
+              value={search}
+              onChangeText={setSearch}
+            />
+          </View>
+
+          {/* Recent workouts label */}
+          <Text style={[styles.sectionTitle, { color: colors.onSurface, textAlign: isRTL ? 'right' : 'left', fontFamily: fontBold, marginBottom: 16 }]}>
+            {t('recent_workouts')}
+          </Text>
+
+          {filtered.length === 0 && (
+            <View style={styles.emptyContainer}>
+              <MaterialIcons name="history" size={40} color={colors.outlineVariant} />
+              <Text style={[styles.emptyText, { color: colors.outlineVariant, fontFamily: fontRegular, marginTop: 12 }]}>
+                {t('no_history')}
+              </Text>
+            </View>
+          )}
+
+          {/* Session Cards */}
+          {filtered.map((session) => {
+            const topExercises = session.exercises.slice(0, 3).map((ex) => {
+              const maxWeight = Math.max(...ex.sets.filter((s) => s.isCompleted).map((s) => s.weight ?? 0));
+              return { name: getExName(ex.exerciseId), maxWeight };
+            });
+
+            return (
+              <View
+                key={session.id}
+                style={[styles.card, { backgroundColor: colors.surfaceContainerLow }]}
+              >
+                <Text style={[styles.ghostText, { color: colors.onSurface }]}>
+                  {session.name.substring(0, 8).toUpperCase()}
+                </Text>
+
+                <View style={styles.cardInner}>
+                  {/* Header Row */}
+                  <View style={styles.cardHeaderRow}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.cardTitle, { color: colors.onSurface, textAlign: isRTL ? 'right' : 'left', fontFamily: fontBold }]}>
+                        {session.name}
+                      </Text>
+                      <View style={styles.metaRow}>
+                        <MaterialIcons name="calendar-today" size={12} color={colors.onSurfaceVariant} />
+                        <Text style={[styles.metaText, { color: colors.onSurfaceVariant, fontFamily: fontRegular }]}>
+                          {session.date}
+                        </Text>
+                        <View style={[styles.metaDot, { backgroundColor: colors.outlineVariant }]} />
+                        <MaterialIcons name="timer" size={12} color={colors.onSurfaceVariant} />
+                        <Text style={[styles.metaText, { color: colors.onSurfaceVariant, fontFamily: fontRegular }]}>
+                          {session.durationMinutes ?? 0} {t('minutes')}
+                        </Text>
+                      </View>
+                    </View>
+                    <View style={styles.volumeContainer}>
+                      <Text style={[styles.volumeValue, { color: colors.primary, fontFamily: fontBold }]}>
+                        {formatVolume(session.totalVolume ?? 0)}
+                      </Text>
+                      <Text style={[styles.volumeLabel, { color: colors.onSurfaceVariant, fontFamily: fontBold }]}>
+                        {t('kg_lifted')}
+                      </Text>
+                    </View>
+                  </View>
+
+                  {/* Exercise Chips */}
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipsRow}>
+                    {topExercises.map((ex, i) => (
+                      <View key={i} style={[styles.chip, { backgroundColor: colors.surfaceContainerHighest }]}>
+                        <Text style={[styles.chipName, { color: colors.onSurface, fontFamily: fontBold }]}>{ex.name}</Text>
+                        {ex.maxWeight > 0 && (
+                          <Text style={[styles.chipWeight, { color: colors.primary, fontFamily: fontBold }]}>{ex.maxWeight}kg</Text>
+                        )}
+                      </View>
+                    ))}
+                  </ScrollView>
+
+                  {/* Repeat Button */}
+                  <TouchableOpacity
+                    style={[styles.repeatBtn, { backgroundColor: colors.primaryContainer }]}
+                    onPress={() => handleRepeat(session.id)}
+                    activeOpacity={0.8}
+                  >
+                    <MaterialIcons name="replay" size={16} color={colors.onPrimaryContainer} />
+                    <Text style={[styles.repeatBtnText, { color: colors.onPrimaryContainer, fontFamily: fontBold }]}>
+                      {t('repeat_workout')}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            );
+          })}
+        </ScrollView>
+      </ScreenBackground>
     );
   }
 
+  // ── Active workout screen ────────────────────────────────────────────────────
   const getExerciseInfo = (exerciseId: string) =>
     exercises.find((e) => e.id === exerciseId);
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.surface }]}>
+    <ScreenBackground style={styles.container}>
       {/* Header */}
-      <View style={[styles.header, { paddingTop: insets.top + 12, backgroundColor: colors.surface }]}>
+      <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
         <View style={styles.headerRow}>
           <TouchableOpacity onPress={handleDiscard}>
-            <Text style={[styles.headerAction, { color: colors.error }]}>✕</Text>
+            <MaterialIcons name="close" size={26} color={colors.error} />
           </TouchableOpacity>
 
-          {/* Editable workout name */}
           <TextInput
-            style={[styles.workoutNameInput, { color: colors.primary }]}
+            style={[styles.workoutNameInput, { color: colors.primary, fontFamily: fontBold }]}
             value={activeWorkout.name}
             onChangeText={renameActiveWorkout}
             placeholder={t('new_workout')}
@@ -154,13 +279,12 @@ export default function WorkoutScreen() {
             style={[styles.finishBtn, { backgroundColor: colors.primaryContainer }]}
             onPress={handleFinish}
           >
-            <Text style={[styles.finishBtnText, { color: colors.onPrimaryContainer }]}>
+            <Text style={[styles.finishBtnText, { color: colors.onPrimaryContainer, fontFamily: fontBold }]}>
               {t('finish')}
             </Text>
           </TouchableOpacity>
         </View>
 
-        {/* Timer bar */}
         <Text style={[styles.elapsedTimer, { color: colors.outlineVariant }]}>
           {formatTimer(elapsed)}
         </Text>
@@ -209,17 +333,15 @@ export default function WorkoutScreen() {
 
           return (
             <View key={`${workoutEx.exerciseId}-${exIdx}`} style={styles.exerciseBlock}>
-              {/* Exercise Header */}
               <View style={styles.exerciseHeader}>
-                <Text style={[styles.exerciseLabel, { color: colors.primary, textAlign: isRTL ? 'right' : 'left' }]}>
+                <Text style={[styles.exerciseLabel, { color: colors.primary, textAlign: isRTL ? 'right' : 'left', fontFamily: fontBold }]}>
                   {t('current_exercise')}
                 </Text>
-                <Text style={[styles.exerciseName, { color: colors.onSurface, textAlign: isRTL ? 'right' : 'left' }]}>
+                <Text style={[styles.exerciseName, { color: colors.onSurface, textAlign: isRTL ? 'right' : 'left', fontFamily: fontBold }]}>
                   {getExerciseName(exerciseInfo, t, language)}
                 </Text>
               </View>
 
-              {/* Sets */}
               {workoutEx.sets.map((set, setIdx) => {
                 const lastSet = lastSets?.[setIdx];
                 const isActive = !set.isCompleted;
@@ -231,11 +353,7 @@ export default function WorkoutScreen() {
                     style={[
                       styles.setRow,
                       {
-                        backgroundColor: isCompleted
-                          ? colors.surfaceContainerLow
-                          : isActive
-                          ? colors.surfaceContainerHighest
-                          : colors.surfaceContainerLow,
+                        backgroundColor: isCompleted ? colors.surfaceContainerLow : colors.surfaceContainerHighest,
                         borderLeftColor: isCompleted ? colors.primaryDim : 'transparent',
                         borderLeftWidth: isCompleted ? 3 : 0,
                         opacity: isCompleted ? 0.7 : 1,
@@ -243,107 +361,69 @@ export default function WorkoutScreen() {
                       },
                     ]}
                   >
-                    {/* Set Number */}
                     <View style={styles.setNumberContainer}>
-                      <Text
-                        style={[
-                          styles.setNumber,
-                          { color: isActive ? colors.primary : colors.outlineVariant },
-                        ]}
-                      >
+                      <Text style={[styles.setNumber, { color: isActive ? colors.primary : colors.outlineVariant, fontFamily: fontBold }]}>
                         {setIdx + 1}
                       </Text>
                     </View>
 
-                    {/* Weight & Reps */}
                     <View style={styles.inputsContainer}>
                       <View style={styles.inputGroup}>
-                        <Text style={[styles.inputLabel, { color: isActive ? colors.primary : colors.outlineVariant, textAlign: isRTL ? 'right' : 'left' }]}>
+                        <Text style={[styles.inputLabel, { color: isActive ? colors.primary : colors.outlineVariant, textAlign: isRTL ? 'right' : 'left', fontFamily: fontBold }]}>
                           {t('weight_kg')}
                         </Text>
                         <TextInput
-                          style={[
-                            styles.input,
-                            {
-                              backgroundColor: isActive ? colors.surfaceContainer : 'transparent',
-                              color: colors.onSurface,
-                            },
-                          ]}
+                          style={[styles.input, { backgroundColor: isActive ? colors.surfaceContainer : 'transparent', color: colors.onSurface, fontFamily: fontBold }]}
                           value={set.weight?.toString() ?? ''}
-                          onChangeText={(v) =>
-                            updateSet(exIdx, setIdx, 'weight', v ? parseFloat(v) : null)
-                          }
+                          onChangeText={(v) => updateSet(exIdx, setIdx, 'weight', v ? parseFloat(v) : null)}
                           placeholder={lastSet?.weight?.toString() ?? '--'}
                           placeholderTextColor={colors.outlineVariant}
                           keyboardType="numeric"
                           editable={!isCompleted}
                         />
                         {lastSet && (
-                          <Text style={[styles.lastValue, { color: colors.outlineVariant }]}>
+                          <Text style={[styles.lastValue, { color: colors.outlineVariant, fontFamily: fontRegular }]}>
                             {t('last_time')}: {lastSet.weight ?? '--'}
                           </Text>
                         )}
                       </View>
                       <View style={styles.inputGroup}>
-                        <Text style={[styles.inputLabel, { color: isActive ? colors.primary : colors.outlineVariant, textAlign: isRTL ? 'right' : 'left' }]}>
+                        <Text style={[styles.inputLabel, { color: isActive ? colors.primary : colors.outlineVariant, textAlign: isRTL ? 'right' : 'left', fontFamily: fontBold }]}>
                           {t('reps')}
                         </Text>
                         <TextInput
-                          style={[
-                            styles.input,
-                            {
-                              backgroundColor: isActive ? colors.surfaceContainer : 'transparent',
-                              color: colors.onSurface,
-                            },
-                          ]}
+                          style={[styles.input, { backgroundColor: isActive ? colors.surfaceContainer : 'transparent', color: colors.onSurface, fontFamily: fontBold }]}
                           value={set.reps?.toString() ?? ''}
-                          onChangeText={(v) =>
-                            updateSet(exIdx, setIdx, 'reps', v ? parseInt(v, 10) : null)
-                          }
+                          onChangeText={(v) => updateSet(exIdx, setIdx, 'reps', v ? parseInt(v, 10) : null)}
                           placeholder={lastSet?.reps?.toString() ?? '--'}
                           placeholderTextColor={colors.outlineVariant}
                           keyboardType="numeric"
                           editable={!isCompleted}
                         />
                         {lastSet && (
-                          <Text style={[styles.lastValue, { color: colors.outlineVariant }]}>
+                          <Text style={[styles.lastValue, { color: colors.outlineVariant, fontFamily: fontRegular }]}>
                             {t('last_time')}: {lastSet.reps ?? '--'}
                           </Text>
                         )}
                       </View>
                     </View>
 
-                    {/* Check Button */}
                     <TouchableOpacity
-                      style={[
-                        styles.checkBtn,
-                        {
-                          backgroundColor: isCompleted ? colors.primary : colors.surfaceContainer,
-                          borderColor: isCompleted ? colors.primary : colors.outlineVariant,
-                        },
-                      ]}
+                      style={[styles.checkBtn, { backgroundColor: isCompleted ? colors.primary : colors.surfaceContainer, borderColor: isCompleted ? colors.primary : colors.outlineVariant }]}
                       onPress={() => handleComplete(exIdx, setIdx)}
                       activeOpacity={0.7}
                     >
-                      <Text
-                        style={[
-                          styles.checkIcon,
-                          { color: isCompleted ? colors.onPrimary : colors.outlineVariant },
-                        ]}
-                      >
-                        ✓
-                      </Text>
+                      <MaterialIcons name="check" size={24} color={isCompleted ? colors.onPrimary : colors.outlineVariant} />
                     </TouchableOpacity>
                   </View>
                 );
               })}
 
-              {/* Add Set Button */}
               <TouchableOpacity
                 style={[styles.addSetBtn, { backgroundColor: colors.surfaceContainerLow }]}
                 onPress={() => addSetToExercise(exIdx)}
               >
-                <Text style={[styles.addSetText, { color: colors.onSurface }]}>
+                <Text style={[styles.addSetText, { color: colors.onSurface, fontFamily: fontBold }]}>
                   + {t('add_set')}
                 </Text>
               </TouchableOpacity>
@@ -351,38 +431,29 @@ export default function WorkoutScreen() {
           );
         })}
 
-        {/* Add Exercise Button */}
         <TouchableOpacity
           style={[styles.addExerciseBtn, { backgroundColor: colors.surfaceContainerLow }]}
           onPress={() => router.push('/select-exercise')}
         >
-          <Text style={[styles.addExerciseText, { color: colors.onSurface }]}>
+          <Text style={[styles.addExerciseText, { color: colors.onSurface, fontFamily: fontBold }]}>
             + {t('add_exercise')}
           </Text>
         </TouchableOpacity>
       </ScrollView>
-    </View>
+    </ScreenBackground>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  header: {
-    paddingHorizontal: 24,
-    paddingBottom: 8,
-  },
+  header: { paddingHorizontal: 24, paddingBottom: 8 },
   headerTitle: {
     fontFamily: 'SpaceGrotesk_700Bold',
     fontSize: 26,
     textTransform: 'uppercase',
     letterSpacing: -0.5,
   },
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  headerAction: { fontSize: 22, fontWeight: '700' },
+  headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   workoutNameInput: {
     fontFamily: 'SpaceGrotesk_700Bold',
     fontSize: 18,
@@ -390,15 +461,8 @@ const styles = StyleSheet.create({
     flex: 1,
     marginHorizontal: 12,
   },
-  finishBtn: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 12,
-  },
-  finishBtnText: {
-    fontFamily: 'SpaceGrotesk_700Bold',
-    fontSize: 13,
-  },
+  finishBtn: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8 },
+  finishBtnText: { fontFamily: 'SpaceGrotesk_700Bold', fontSize: 13 },
   elapsedTimer: {
     fontFamily: 'SpaceGrotesk_400Regular',
     fontSize: 13,
@@ -408,139 +472,106 @@ const styles = StyleSheet.create({
   },
   scroll: { flex: 1 },
   scrollContent: { paddingHorizontal: 16 },
-  emptyCenter: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+
+  // Start / history screen
   startBtn: {
-    borderRadius: 16,
-    paddingVertical: 20,
-    paddingHorizontal: 40,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    borderRadius: 8,
+    paddingVertical: 18,
+    marginBottom: 20,
   },
   startBtnText: {
     fontFamily: 'SpaceGrotesk_700Bold',
-    fontSize: 16,
+    fontSize: 15,
     textTransform: 'uppercase',
     letterSpacing: 1,
   },
-
-  // Rest Timer
-  restTimerContainer: {
-    borderRadius: 12,
-    padding: 24,
-    marginBottom: 20,
+  searchBox: {
+    flexDirection: 'row',
     alignItems: 'center',
+    borderRadius: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    marginBottom: 20,
   },
-  restTimerLabel: {
+  searchInput: { flex: 1, fontSize: 14 },
+  sectionTitle: {
     fontFamily: 'SpaceGrotesk_700Bold',
-    fontSize: 10,
-    textTransform: 'uppercase',
-    letterSpacing: 2,
-  },
-  restTimerValue: {
-    fontFamily: 'SpaceGrotesk_700Bold',
-    fontSize: 52,
-    letterSpacing: -2,
-    marginVertical: 4,
-  },
-  restTimerActions: { flexDirection: 'row', gap: 12, marginTop: 8 },
-  restTimerBtn: {
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 20,
-  },
-  restTimerBtnText: {
-    fontFamily: 'SpaceGrotesk_700Bold',
-    fontSize: 12,
-  },
-
-  // Exercise
-  exerciseBlock: { marginBottom: 28 },
-  exerciseHeader: { marginBottom: 12 },
-  exerciseLabel: {
-    fontFamily: 'SpaceGrotesk_700Bold',
-    fontSize: 10,
-    textTransform: 'uppercase',
-    letterSpacing: 2,
-  },
-  exerciseName: {
-    fontFamily: 'SpaceGrotesk_700Bold',
-    fontSize: 26,
+    fontSize: 20,
     textTransform: 'uppercase',
     letterSpacing: -0.5,
   },
+  emptyContainer: { alignItems: 'center', paddingTop: 48 },
+  emptyText: { fontSize: 15 },
 
-  // Set Row
-  setRow: {
+  // Session card
+  card: {
+    borderRadius: 10,
+    padding: 24,
+    marginBottom: 16,
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  ghostText: {
+    position: 'absolute',
+    top: -8,
+    left: -8,
+    fontSize: 60,
+    fontFamily: 'SpaceGrotesk_700Bold',
+    opacity: 0.03,
+    letterSpacing: -2,
+  },
+  cardInner: { position: 'relative', zIndex: 1 },
+  cardHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 },
+  cardTitle: { fontFamily: 'SpaceGrotesk_700Bold', fontSize: 18, textTransform: 'uppercase', marginBottom: 4 },
+  metaRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  metaText: { fontSize: 12 },
+  metaDot: { width: 3, height: 3, borderRadius: 2 },
+  volumeContainer: { alignItems: 'flex-end' },
+  volumeValue: { fontFamily: 'SpaceGrotesk_700Bold', fontSize: 22 },
+  volumeLabel: { fontFamily: 'SpaceGrotesk_700Bold', fontSize: 9, textTransform: 'uppercase', letterSpacing: 2 },
+  chipsRow: { flexDirection: 'row', marginBottom: 16 },
+  chip: { flexDirection: 'row', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 10, marginRight: 8, gap: 6 },
+  chipName: { fontFamily: 'SpaceGrotesk_700Bold', fontSize: 11 },
+  chipWeight: { fontFamily: 'SpaceGrotesk_700Bold', fontSize: 11 },
+  repeatBtn: {
     flexDirection: 'row',
-    alignItems: 'center',
-    borderRadius: 12,
-    padding: 14,
-    marginBottom: 8,
-    gap: 12,
-  },
-  setNumberContainer: { width: 36, alignItems: 'center' },
-  setNumber: {
-    fontFamily: 'SpaceGrotesk_700Bold',
-    fontSize: 22,
-  },
-  inputsContainer: {
-    flex: 1,
-    flexDirection: 'row',
-    gap: 12,
-  },
-  inputGroup: { flex: 1 },
-  inputLabel: {
-    fontFamily: 'SpaceGrotesk_700Bold',
-    fontSize: 9,
-    textTransform: 'uppercase',
-    letterSpacing: 2,
-    marginBottom: 4,
-  },
-  input: {
-    fontFamily: 'SpaceGrotesk_700Bold',
-    fontSize: 22,
-    borderRadius: 8,
-    padding: 8,
-    textAlign: 'center',
-  },
-  lastValue: {
-    fontFamily: 'Manrope_400Regular',
-    fontSize: 9,
-    marginTop: 3,
-  },
-  checkBtn: {
-    width: 52,
-    height: 52,
-    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
-  },
-  checkIcon: {
-    fontSize: 22,
-    fontWeight: '800',
-  },
-
-  addSetBtn: {
-    borderRadius: 12,
+    gap: 8,
+    borderRadius: 8,
     paddingVertical: 14,
-    alignItems: 'center',
-    marginTop: 4,
   },
-  addSetText: {
-    fontFamily: 'SpaceGrotesk_700Bold',
-    fontSize: 12,
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-  },
-  addExerciseBtn: {
-    borderRadius: 12,
-    paddingVertical: 18,
-    alignItems: 'center',
-    marginTop: 8,
-  },
-  addExerciseText: {
-    fontFamily: 'SpaceGrotesk_700Bold',
-    fontSize: 13,
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-  },
+  repeatBtnText: { fontFamily: 'SpaceGrotesk_700Bold', fontSize: 13, textTransform: 'uppercase', letterSpacing: 0.5 },
+
+  // Rest timer
+  restTimerContainer: { borderRadius: 12, padding: 24, marginBottom: 20, alignItems: 'center' },
+  restTimerLabel: { fontFamily: 'SpaceGrotesk_700Bold', fontSize: 10, textTransform: 'uppercase', letterSpacing: 2 },
+  restTimerValue: { fontFamily: 'SpaceGrotesk_700Bold', fontSize: 52, letterSpacing: -2, marginVertical: 4 },
+  restTimerActions: { flexDirection: 'row', gap: 12, marginTop: 8 },
+  restTimerBtn: { paddingHorizontal: 20, paddingVertical: 10, borderRadius: 20 },
+  restTimerBtnText: { fontFamily: 'SpaceGrotesk_700Bold', fontSize: 12 },
+
+  // Exercise blocks
+  exerciseBlock: { marginBottom: 28 },
+  exerciseHeader: { marginBottom: 12 },
+  exerciseLabel: { fontFamily: 'SpaceGrotesk_700Bold', fontSize: 10, textTransform: 'uppercase', letterSpacing: 2 },
+  exerciseName: { fontFamily: 'SpaceGrotesk_700Bold', fontSize: 26, textTransform: 'uppercase', letterSpacing: -0.5 },
+  setRow: { flexDirection: 'row', alignItems: 'center', borderRadius: 12, padding: 14, marginBottom: 8, gap: 12 },
+  setNumberContainer: { width: 36, alignItems: 'center' },
+  setNumber: { fontFamily: 'SpaceGrotesk_700Bold', fontSize: 22 },
+  inputsContainer: { flex: 1, flexDirection: 'row', gap: 12 },
+  inputGroup: { flex: 1 },
+  inputLabel: { fontFamily: 'SpaceGrotesk_700Bold', fontSize: 9, textTransform: 'uppercase', letterSpacing: 2, marginBottom: 4 },
+  input: { fontFamily: 'SpaceGrotesk_700Bold', fontSize: 22, borderRadius: 8, padding: 8, textAlign: 'center' },
+  lastValue: { fontFamily: 'Manrope_400Regular', fontSize: 9, marginTop: 3 },
+  checkBtn: { width: 52, height: 52, borderRadius: 12, alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
+  checkIcon: { fontSize: 22, fontWeight: '800' },
+  addSetBtn: { borderRadius: 12, paddingVertical: 14, alignItems: 'center', marginTop: 4 },
+  addSetText: { fontFamily: 'SpaceGrotesk_700Bold', fontSize: 12, textTransform: 'uppercase', letterSpacing: 1 },
+  addExerciseBtn: { borderRadius: 12, paddingVertical: 18, alignItems: 'center', marginTop: 8 },
+  addExerciseText: { fontFamily: 'SpaceGrotesk_700Bold', fontSize: 13, textTransform: 'uppercase', letterSpacing: 1 },
 });
