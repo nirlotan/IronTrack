@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { getJSON, setJSON, hydrateCache } from '../storage/mmkv';
+import { getJSON, setJSON, hydrateCache } from '../storage/storage';
 import { defaultExercises } from '../data/exercises';
 import * as Crypto from 'expo-crypto';
 
@@ -76,6 +76,7 @@ interface AppState {
   renameActiveWorkout: (name: string) => void;
   addExerciseToWorkout: (exerciseId: string) => void;
   addSetToExercise: (exerciseIndex: number) => void;
+  removeSet: (exerciseIndex: number, setIndex: number) => void;
   updateSet: (exerciseIndex: number, setIndex: number, field: 'weight' | 'reps', value: number | null) => void;
   toggleSetComplete: (exerciseIndex: number, setIndex: number) => void;
   finishWorkout: () => void;
@@ -262,6 +263,18 @@ export const useAppStore = create<AppState>((set, get) => ({
         isCompleted: false,
       },
     ];
+    exercises[exerciseIndex] = exercise;
+    const updated = { ...aw, exercises };
+    set({ activeWorkout: updated });
+    setJSON(KEYS.activeWorkout, updated);
+  },
+
+  removeSet: (exerciseIndex, setIndex) => {
+    const aw = get().activeWorkout;
+    if (!aw) return;
+    const exercises = [...aw.exercises];
+    const exercise = { ...exercises[exerciseIndex] };
+    exercise.sets = exercise.sets.filter((_, i) => i !== setIndex);
     exercises[exerciseIndex] = exercise;
     const updated = { ...aw, exercises };
     set({ activeWorkout: updated });

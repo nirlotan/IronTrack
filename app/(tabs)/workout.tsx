@@ -8,6 +8,7 @@ import {
   TouchableOpacity,
   Alert,
 } from 'react-native';
+import { Swipeable } from 'react-native-gesture-handler';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -31,6 +32,7 @@ export default function WorkoutScreen() {
   const startWorkoutFromSession = useAppStore((s) => s.startWorkoutFromSession);
   const renameActiveWorkout = useAppStore((s) => s.renameActiveWorkout);
   const updateSet = useAppStore((s) => s.updateSet);
+  const removeSet = useAppStore((s) => s.removeSet);
   const toggleSetComplete = useAppStore((s) => s.toggleSetComplete);
   const addSetToExercise = useAppStore((s) => s.addSetToExercise);
   const finishWorkout = useAppStore((s) => s.finishWorkout);
@@ -138,18 +140,6 @@ export default function WorkoutScreen() {
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
-          {/* New Workout Button */}
-          <TouchableOpacity
-            style={[styles.startBtn, { backgroundColor: colors.primaryContainer }]}
-            onPress={startEmptyWorkout}
-            activeOpacity={0.8}
-          >
-            <MaterialIcons name="add" size={22} color={colors.onPrimaryContainer} />
-            <Text style={[styles.startBtnText, { color: colors.onPrimaryContainer, fontFamily: fontBold }]}>
-              {t('new_workout')}
-            </Text>
-          </TouchableOpacity>
-
           {/* Search past workouts */}
           <View style={[styles.searchBox, { backgroundColor: colors.surfaceContainerLow, flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
             <MaterialIcons name="search" size={18} color={colors.outlineVariant} style={{ marginRight: isRTL ? 0 : 10, marginLeft: isRTL ? 10 : 0 }} />
@@ -161,6 +151,18 @@ export default function WorkoutScreen() {
               onChangeText={setSearch}
             />
           </View>
+
+          {/* New Workout Button */}
+          <TouchableOpacity
+            style={[styles.startBtn, { backgroundColor: colors.primaryContainer }]}
+            onPress={startEmptyWorkout}
+            activeOpacity={0.8}
+          >
+            <MaterialIcons name="add" size={22} color={colors.onPrimaryContainer} />
+            <Text style={[styles.startBtnText, { color: colors.onPrimaryContainer, fontFamily: fontBold }]}>
+              {t('new_workout')}
+            </Text>
+          </TouchableOpacity>
 
           {/* Recent workouts label */}
           <Text style={[styles.sectionTitle, { color: colors.onSurface, textAlign: isRTL ? 'right' : 'left', fontFamily: fontBold, marginBottom: 16 }]}>
@@ -347,9 +349,25 @@ export default function WorkoutScreen() {
                 const isActive = !set.isCompleted;
                 const isCompleted = set.isCompleted;
 
+                const renderDeleteAction = () => (
+                  <View style={[styles.deleteAction, { backgroundColor: colors.error }]}>
+                    <MaterialIcons name="delete" size={24} color="#fff" />
+                  </View>
+                );
+
                 return (
-                  <View
+                  <Swipeable
                     key={set.id}
+                    renderRightActions={renderDeleteAction}
+                    renderLeftActions={renderDeleteAction}
+                    onSwipeableOpen={() => {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                      removeSet(exIdx, setIdx);
+                    }}
+                    overshootRight={false}
+                    overshootLeft={false}
+                  >
+                  <View
                     style={[
                       styles.setRow,
                       {
@@ -372,15 +390,31 @@ export default function WorkoutScreen() {
                         <Text style={[styles.inputLabel, { color: isActive ? colors.primary : colors.outlineVariant, textAlign: isRTL ? 'right' : 'left', fontFamily: fontBold }]}>
                           {t('weight_kg')}
                         </Text>
-                        <TextInput
-                          style={[styles.input, { backgroundColor: isActive ? colors.surfaceContainer : 'transparent', color: colors.onSurface, fontFamily: fontBold }]}
-                          value={set.weight?.toString() ?? ''}
-                          onChangeText={(v) => updateSet(exIdx, setIdx, 'weight', v ? parseFloat(v) : null)}
-                          placeholder={lastSet?.weight?.toString() ?? '--'}
-                          placeholderTextColor={colors.outlineVariant}
-                          keyboardType="numeric"
-                          editable={!isCompleted}
-                        />
+                        <View style={styles.stepperRow}>
+                          <TouchableOpacity
+                            style={[styles.stepperBtn, { backgroundColor: isActive ? colors.surfaceContainer : 'transparent', opacity: isCompleted ? 0.4 : 1 }]}
+                            onPress={() => !isCompleted && updateSet(exIdx, setIdx, 'weight', Math.max(0, (set.weight ?? 0) - 2.5))}
+                            disabled={isCompleted}
+                          >
+                            <MaterialIcons name="remove" size={16} color={colors.onSurface} />
+                          </TouchableOpacity>
+                          <TextInput
+                            style={[styles.input, styles.stepperInput, { backgroundColor: 'transparent', color: colors.onSurface, fontFamily: fontBold }]}
+                            value={set.weight?.toString() ?? ''}
+                            onChangeText={(v) => updateSet(exIdx, setIdx, 'weight', v ? parseFloat(v) : null)}
+                            placeholder={lastSet?.weight?.toString() ?? '--'}
+                            placeholderTextColor={colors.outlineVariant}
+                            keyboardType="numeric"
+                            editable={!isCompleted}
+                          />
+                          <TouchableOpacity
+                            style={[styles.stepperBtn, { backgroundColor: isActive ? colors.surfaceContainer : 'transparent', opacity: isCompleted ? 0.4 : 1 }]}
+                            onPress={() => !isCompleted && updateSet(exIdx, setIdx, 'weight', (set.weight ?? 0) + 2.5)}
+                            disabled={isCompleted}
+                          >
+                            <MaterialIcons name="add" size={16} color={colors.onSurface} />
+                          </TouchableOpacity>
+                        </View>
                         {lastSet && (
                           <Text style={[styles.lastValue, { color: colors.outlineVariant, fontFamily: fontRegular }]}>
                             {t('last_time')}: {lastSet.weight ?? '--'}
@@ -391,15 +425,31 @@ export default function WorkoutScreen() {
                         <Text style={[styles.inputLabel, { color: isActive ? colors.primary : colors.outlineVariant, textAlign: isRTL ? 'right' : 'left', fontFamily: fontBold }]}>
                           {t('reps')}
                         </Text>
-                        <TextInput
-                          style={[styles.input, { backgroundColor: isActive ? colors.surfaceContainer : 'transparent', color: colors.onSurface, fontFamily: fontBold }]}
-                          value={set.reps?.toString() ?? ''}
-                          onChangeText={(v) => updateSet(exIdx, setIdx, 'reps', v ? parseInt(v, 10) : null)}
-                          placeholder={lastSet?.reps?.toString() ?? '--'}
-                          placeholderTextColor={colors.outlineVariant}
-                          keyboardType="numeric"
-                          editable={!isCompleted}
-                        />
+                        <View style={styles.stepperRow}>
+                          <TouchableOpacity
+                            style={[styles.stepperBtn, { backgroundColor: isActive ? colors.surfaceContainer : 'transparent', opacity: isCompleted ? 0.4 : 1 }]}
+                            onPress={() => !isCompleted && updateSet(exIdx, setIdx, 'reps', Math.max(0, (set.reps ?? 0) - 1))}
+                            disabled={isCompleted}
+                          >
+                            <MaterialIcons name="remove" size={16} color={colors.onSurface} />
+                          </TouchableOpacity>
+                          <TextInput
+                            style={[styles.input, styles.stepperInput, { backgroundColor: 'transparent', color: colors.onSurface, fontFamily: fontBold }]}
+                            value={set.reps?.toString() ?? ''}
+                            onChangeText={(v) => updateSet(exIdx, setIdx, 'reps', v ? parseInt(v, 10) : null)}
+                            placeholder={lastSet?.reps?.toString() ?? '--'}
+                            placeholderTextColor={colors.outlineVariant}
+                            keyboardType="numeric"
+                            editable={!isCompleted}
+                          />
+                          <TouchableOpacity
+                            style={[styles.stepperBtn, { backgroundColor: isActive ? colors.surfaceContainer : 'transparent', opacity: isCompleted ? 0.4 : 1 }]}
+                            onPress={() => !isCompleted && updateSet(exIdx, setIdx, 'reps', (set.reps ?? 0) + 1)}
+                            disabled={isCompleted}
+                          >
+                            <MaterialIcons name="add" size={16} color={colors.onSurface} />
+                          </TouchableOpacity>
+                        </View>
                         {lastSet && (
                           <Text style={[styles.lastValue, { color: colors.outlineVariant, fontFamily: fontRegular }]}>
                             {t('last_time')}: {lastSet.reps ?? '--'}
@@ -416,6 +466,7 @@ export default function WorkoutScreen() {
                       <MaterialIcons name="check" size={24} color={isCompleted ? colors.onPrimary : colors.outlineVariant} />
                     </TouchableOpacity>
                   </View>
+                  </Swipeable>
                 );
               })}
 
@@ -567,6 +618,10 @@ const styles = StyleSheet.create({
   inputGroup: { flex: 1 },
   inputLabel: { fontFamily: 'SpaceGrotesk_700Bold', fontSize: 9, textTransform: 'uppercase', letterSpacing: 2, marginBottom: 4 },
   input: { fontFamily: 'SpaceGrotesk_700Bold', fontSize: 22, borderRadius: 8, padding: 8, textAlign: 'center' },
+  stepperRow: { flexDirection: 'row', alignItems: 'center', gap: 2 },
+  stepperBtn: { width: 28, height: 36, borderRadius: 6, alignItems: 'center', justifyContent: 'center' },
+  stepperInput: { flex: 1, fontSize: 18, padding: 4 },
+  deleteAction: { width: 72, marginBottom: 8, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   lastValue: { fontFamily: 'Manrope_400Regular', fontSize: 9, marginTop: 3 },
   checkBtn: { width: 52, height: 52, borderRadius: 12, alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
   checkIcon: { fontSize: 22, fontWeight: '800' },
