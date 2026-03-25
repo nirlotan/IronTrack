@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+
+<html class="light" dir="rtl" lang="he"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700;800;900&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "on-error-container": "#520c00",
+              "primary": "#5b5b5b",
+              "tertiary-fixed-dim": "#beee00",
+              "primary-fixed-dim": "#dddddd",
+              "inverse-surface": "#0c0f0f",
+              "surface-variant": "#dbdddd",
+              "inverse-on-surface": "#9c9d9d",
+              "on-primary": "#f3f3f3",
+              "surface-container-low": "#f0f1f1",
+              "surface-container-high": "#e1e3e3",
+              "tertiary-dim": "#435600",
+              "background": "#f6f6f6",
+              "on-tertiary": "#e1ff88",
+              "on-tertiary-fixed-variant": "#526900",
+              "on-error": "#ffefec",
+              "surface-tint": "#5b5b5b",
+              "error": "#b02500",
+              "primary-fixed": "#ebebeb",
+              "on-surface-variant": "#5a5c5c",
+              "outline": "#767777",
+              "on-secondary-fixed": "#354500",
+              "surface-container-lowest": "#ffffff",
+              "tertiary-container": "#cafd00",
+              "on-secondary": "#e1ff88",
+              "on-surface": "#2d2f2f",
+              "on-tertiary-container": "#4a5e00",
+              "surface-bright": "#f6f6f6",
+              "inverse-primary": "#ffffff",
+              "error-container": "#f95630",
+              "on-primary-fixed": "#444444",
+              "on-background": "#2d2f2f",
+              "surface-dim": "#d3d5d5",
+              "surface-container": "#e7e8e8",
+              "on-secondary-fixed-variant": "#4e6300",
+              "on-tertiary-fixed": "#3a4a00",
+              "tertiary": "#4e6300",
+              "on-primary-fixed-variant": "#616161",
+              "on-primary-container": "#575757",
+              "on-secondary-container": "#455900",
+              "tertiary-fixed": "#cafd00",
+              "outline-variant": "#acadad",
+              "error-dim": "#b92902",
+              "primary-container": "#ebebeb",
+              "secondary-fixed": "#c3f400",
+              "primary-dim": "#4f4f4f",
+              "secondary-container": "#c3f400",
+              "surface": "#f6f6f6",
+              "secondary-fixed-dim": "#b7e500",
+              "secondary-dim": "#435600",
+              "surface-container-highest": "#dbdddd",
+              "secondary": "#4e6300"
+            },
+            fontFamily: {
+              "headline": ["Space Grotesk", "sans-serif"],
+              "body": ["Space Grotesk", "sans-serif"],
+              "label": ["Space Grotesk", "sans-serif"]
+            },
+            borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
+          },
+        },
+      }
+    </script>
+<style>
+        body { font-family: 'Space Grotesk', sans-serif; }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-surface text-on-surface antialiased min-h-screen pb-24">
+<!-- TopAppBar -->
+<header class="bg-[#f6f6f6] text-[#2d2f2f] docked full-width top-0 z-50 flex justify-between items-center w-full px-6 h-16 sticky top-0">
+<div class="flex items-center gap-4">
+<span class="material-symbols-outlined text-2xl">menu</span>
+<h1 class="text-2xl font-black tracking-tighter text-[#2d2f2f] uppercase">PERFORMANCE</h1>
+</div>
+<div class="flex items-center gap-4">
+<span class="material-symbols-outlined text-2xl">account_circle</span>
+</div>
+</header>
+<main class="max-w-5xl mx-auto px-6 pt-8">
+<!-- Editorial Header Section -->
+<section class="mb-12">
+<div class="flex flex-col md:flex-row md:items-end justify-between gap-6">
+<div class="space-y-2">
+<span class="text-[10px] font-bold tracking-widest uppercase text-on-surface-variant block">Library / Methods</span>
+<h2 class="text-6xl md:text-8xl font-black leading-[0.85] tracking-tighter text-on-surface">תבניות<br/>אימון</h2>
+</div>
+<div class="bg-secondary-container p-6 w-full md:w-64 flex flex-col justify-between h-48 group cursor-pointer active:translate-x-[-2px] active:translate-y-[-2px] active:shadow-[2px_2px_0px_0px_rgba(45,47,47,1)] transition-all">
+<span class="material-symbols-outlined text-4xl text-on-secondary-fixed">add_box</span>
+<div>
+<p class="text-[10px] font-bold tracking-widest uppercase text-on-secondary-fixed mb-1">PROGRAM BUILDER</p>
+<h3 class="text-2xl font-bold leading-none text-on-secondary-fixed">יצירת תבנית חדשה</h3>
+</div>
+</div>
+</div>
+</section>
+<!-- Bento Grid Layout for Templates -->
+<div class="grid grid-cols-1 md:grid-cols-12 gap-4">
+<!-- Large Focus Template -->
+<div class="md:col-span-8 bg-surface-container-lowest p-8 flex flex-col justify-between min-h-[320px] relative group overflow-hidden">
+<div class="absolute top-0 right-0 p-8">
+<span class="material-symbols-outlined text-on-surface-variant opacity-20 text-9xl">fitness_center</span>
+</div>
+<div class="z-10">
+<span class="bg-secondary px-2 py-1 text-[10px] font-bold text-on-secondary tracking-widest uppercase">HIGHEST INTENSITY</span>
+<h3 class="text-5xl font-black mt-4 tracking-tighter uppercase leading-none">חזה ויד אחורית</h3>
+<p class="text-on-surface-variant font-medium mt-4 max-w-xs">Chest &amp; Triceps. 6 תרגילים, 75 דקות משוערות. דגש על היפרטרופיה.</p>
+</div>
+<div class="z-10 flex items-center justify-between">
+<div class="flex gap-8">
+<div>
+<p class="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest">VOLUME</p>
+<p class="text-xl font-bold italic">14.2K KG</p>
+</div>
+<div>
+<p class="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest">LAST DONE</p>
+<p class="text-xl font-bold italic">2 DAYS AGO</p>
+</div>
+</div>
+<button class="bg-secondary text-on-secondary-fixed font-bold py-3 px-8 text-sm uppercase tracking-widest active:translate-x-[-2px] active:translate-y-[-2px] active:shadow-[2px_2px_0px_0px_rgba(45,47,47,1)] hover:bg-secondary-fixed transition-colors">
+                        START
+                    </button>
+</div>
+</div>
+<!-- Secondary Card -->
+<div class="md:col-span-4 bg-surface-container p-6 flex flex-col justify-between min-h-[320px] group cursor-pointer hover:bg-secondary-container transition-colors">
+<div>
+<div class="flex justify-between items-start">
+<span class="material-symbols-outlined text-3xl">format_list_bulleted</span>
+<span class="text-[10px] font-bold tracking-widest">#02</span>
+</div>
+<h3 class="text-3xl font-black mt-6 tracking-tighter leading-none uppercase">יום רגליים</h3>
+<p class="text-sm mt-2 opacity-70">Leg Day. 5 תרגילים. דגש כוח.</p>
+</div>
+<div class="space-y-1">
+<div class="h-1 bg-on-surface-variant opacity-10 w-full">
+<div class="h-1 bg-secondary w-3/4"></div>
+</div>
+<p class="text-[10px] font-bold tracking-widest uppercase">75% CONSISTENCY</p>
+</div>
+</div>
+<!-- Smaller Bento Items -->
+<div class="md:col-span-4 bg-surface-container-lowest p-6 flex flex-col justify-between min-h-[200px]">
+<h3 class="text-2xl font-bold tracking-tighter leading-tight uppercase">גב ויד קדמית</h3>
+<div class="flex justify-between items-end">
+<span class="text-[10px] font-bold tracking-widest opacity-50 uppercase">BACK / BICEPS</span>
+<span class="material-symbols-outlined text-on-surface-variant">arrow_forward</span>
+</div>
+</div>
+<div class="md:col-span-4 bg-surface-container-lowest p-6 flex flex-col justify-between min-h-[200px] border-t-4 border-secondary">
+<h3 class="text-2xl font-bold tracking-tighter leading-tight uppercase">כתפיים</h3>
+<div class="flex justify-between items-end">
+<span class="text-[10px] font-bold tracking-widest opacity-50 uppercase">SHOULDERS</span>
+<span class="material-symbols-outlined text-on-surface-variant">arrow_forward</span>
+</div>
+</div>
+<div class="md:col-span-4 bg-on-surface text-surface p-6 flex flex-col justify-between min-h-[200px]">
+<h3 class="text-2xl font-bold tracking-tighter leading-tight uppercase">אימון פול-בודי</h3>
+<div class="flex justify-between items-end">
+<span class="text-[10px] font-bold tracking-widest opacity-50 uppercase text-surface-variant">FULL BODY</span>
+<span class="material-symbols-outlined text-secondary">bolt</span>
+</div>
+</div>
+</div>
+<!-- Utility Section / Recent Activity -->
+<section class="mt-16 mb-8">
+<h4 class="text-[10px] font-bold tracking-[0.2em] uppercase text-on-surface-variant mb-6 border-b border-surface-container-high pb-2">DATA RECAP / היסטוריה קרובה</h4>
+<div class="space-y-2">
+<div class="bg-surface-container-low p-4 flex items-center justify-between hover:bg-secondary-fixed transition-colors cursor-pointer group">
+<div class="flex items-center gap-6">
+<span class="text-xl font-black italic tracking-tighter w-12">12.04</span>
+<span class="font-bold">חזה ויד אחורית</span>
+</div>
+<div class="flex items-center gap-8">
+<span class="text-[10px] font-bold opacity-60">85 MIN</span>
+<span class="material-symbols-outlined text-sm opacity-0 group-hover:opacity-100">open_in_new</span>
+</div>
+</div>
+<div class="bg-surface-container-low p-4 flex items-center justify-between hover:bg-secondary-fixed transition-colors cursor-pointer group">
+<div class="flex items-center gap-6">
+<span class="text-xl font-black italic tracking-tighter w-12">10.04</span>
+<span class="font-bold">יום רגליים</span>
+</div>
+<div class="flex items-center gap-8">
+<span class="text-[10px] font-bold opacity-60">92 MIN</span>
+<span class="material-symbols-outlined text-sm opacity-0 group-hover:opacity-100">open_in_new</span>
+</div>
+</div>
+</div>
+</section>
+</main>
+<!-- BottomNavBar -->
+<nav class="fixed bottom-0 left-0 w-full flex justify-around items-stretch h-20 px-0 pb-safe bg-[#f6f6f6] text-[#2d2f2f] z-50">
+<!-- Templates - ACTIVE -->
+<a class="flex flex-col items-center justify-center bg-[#CCFF00] text-[#2d2f2f] p-3 h-full flex-1" href="#">
+<span class="material-symbols-outlined" data-icon="copy_all">copy_all</span>
+<span class="font-['Space_Grotesk'] text-[10px] font-bold tracking-widest uppercase mt-1">Templates</span>
+</a>
+<!-- Workout -->
+<a class="flex flex-col items-center justify-center text-[#2d2f2f] opacity-70 p-3 h-full flex-1 hover:bg-[#dbdddd]" href="#">
+<span class="material-symbols-outlined" data-icon="fitness_center">fitness_center</span>
+<span class="font-['Space_Grotesk'] text-[10px] font-bold tracking-widest uppercase mt-1">Workout</span>
+</a>
+<!-- Library -->
+<a class="flex flex-col items-center justify-center text-[#2d2f2f] opacity-70 p-3 h-full flex-1 hover:bg-[#dbdddd]" href="#">
+<span class="material-symbols-outlined" data-icon="local_library">local_library</span>
+<span class="font-['Space_Grotesk'] text-[10px] font-bold tracking-widest uppercase mt-1">Library</span>
+</a>
+<!-- History -->
+<a class="flex flex-col items-center justify-center text-[#2d2f2f] opacity-70 p-3 h-full flex-1 hover:bg-[#dbdddd]" href="#">
+<span class="material-symbols-outlined" data-icon="history">history</span>
+<span class="font-['Space_Grotesk'] text-[10px] font-bold tracking-widest uppercase mt-1">History</span>
+</a>
+</nav>
+</body></html>

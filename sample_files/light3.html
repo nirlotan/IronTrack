@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+
+<html dir="rtl" lang="he"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700;800;900&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "on-error-container": "#520c00",
+                        "primary": "#5b5b5b",
+                        "tertiary-fixed-dim": "#beee00",
+                        "primary-fixed-dim": "#dddddd",
+                        "inverse-surface": "#0c0f0f",
+                        "surface-variant": "#dbdddd",
+                        "inverse-on-surface": "#9c9d9d",
+                        "on-primary": "#f3f3f3",
+                        "surface-container-low": "#f0f1f1",
+                        "surface-container-high": "#e1e3e3",
+                        "tertiary-dim": "#435600",
+                        "background": "#f6f6f6",
+                        "on-tertiary": "#e1ff88",
+                        "on-tertiary-fixed-variant": "#526900",
+                        "on-error": "#ffefec",
+                        "surface-tint": "#5b5b5b",
+                        "error": "#b02500",
+                        "primary-fixed": "#ebebeb",
+                        "on-surface-variant": "#5a5c5c",
+                        "outline": "#767777",
+                        "on-secondary-fixed": "#354500",
+                        "surface-container-lowest": "#ffffff",
+                        "tertiary-container": "#cafd00",
+                        "on-secondary": "#e1ff88",
+                        "on-surface": "#2d2f2f",
+                        "on-tertiary-container": "#4a5e00",
+                        "surface-bright": "#f6f6f6",
+                        "inverse-primary": "#ffffff",
+                        "error-container": "#f95630",
+                        "on-primary-fixed": "#444444",
+                        "on-background": "#2d2f2f",
+                        "surface-dim": "#d3d5d5",
+                        "surface-container": "#e7e8e8",
+                        "on-secondary-fixed-variant": "#4e6300",
+                        "on-tertiary-fixed": "#3a4a00",
+                        "tertiary": "#4e6300",
+                        "on-primary-fixed-variant": "#616161",
+                        "on-primary-container": "#575757",
+                        "on-secondary-container": "#455900",
+                        "tertiary-fixed": "#cafd00",
+                        "outline-variant": "#acadad",
+                        "error-dim": "#b92902",
+                        "primary-container": "#ebebeb",
+                        "secondary-fixed": "#c3f400",
+                        "primary-dim": "#4f4f4f",
+                        "secondary-container": "#c3f400",
+                        "surface": "#f6f6f6",
+                        "secondary-fixed-dim": "#b7e500",
+                        "secondary-dim": "#435600",
+                        "surface-container-highest": "#dbdddd",
+                        "secondary": "#4e6300"
+                    },
+                    fontFamily: {
+                        "headline": ["Space Grotesk"],
+                        "body": ["Space Grotesk"],
+                        "label": ["Space Grotesk"]
+                    },
+                    borderRadius: {"DEFAULT": "0px", "lg": "0px", "xl": "0px", "full": "9999px"},
+                },
+            },
+        }
+    </script>
+<style>
+        body { font-family: 'Space Grotesk', sans-serif; }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .neo-shadow {
+            box-shadow: 4px 4px 0px 0px rgba(45, 47, 47, 1);
+        }
+        .neo-shadow-hover:hover {
+            transform: translate(-2px, -2px);
+            box-shadow: 6px 6px 0px 0px rgba(45, 47, 47, 1);
+        }
+        .neo-shadow-active:active {
+            transform: translate(2px, 2px);
+            box-shadow: 0px 0px 0px 0px rgba(45, 47, 47, 1);
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-surface text-on-surface antialiased min-h-screen pb-32">
+<!-- Top Navigation Anchor -->
+<header class="fixed top-0 z-50 w-full h-16 px-6 flex justify-between items-center bg-[#f6f6f6] dark:bg-[#1a1c1c] border-b-0">
+<div class="flex items-center gap-4">
+<span class="material-symbols-outlined text-[#2d2f2f] dark:text-[#f6f6f6]">menu</span>
+<h1 class="text-2xl font-black tracking-tighter text-[#2d2f2f] dark:text-[#f6f6f6] uppercase font-['Space_Grotesk']">PERFORMANCE</h1>
+</div>
+<div class="flex items-center gap-4">
+<span class="material-symbols-outlined text-[#2d2f2f] dark:text-[#f6f6f6]">account_circle</span>
+</div>
+</header>
+<main class="pt-24 px-6 max-w-4xl mx-auto">
+<!-- Editorial Header Section -->
+<section class="mb-12">
+<div class="flex flex-col md:flex-row md:items-end justify-between gap-6">
+<div class="space-y-2">
+<span class="text-[10px] font-bold tracking-[0.2em] uppercase text-outline">RESOURCE CENTER</span>
+<h2 class="text-5xl font-extrabold tracking-tighter text-on-surface uppercase">ספריית תרגילים</h2>
+</div>
+<button class="bg-secondary-container text-on-secondary-fixed font-bold py-4 px-8 neo-shadow neo-shadow-hover neo-shadow-active flex items-center gap-2 transition-all">
+<span class="material-symbols-outlined">add</span>
+<span class="uppercase tracking-tight text-sm">הוסף תרגיל אישי</span>
+</button>
+</div>
+</section>
+<!-- Search Functional Module -->
+<section class="mb-16">
+<div class="relative group">
+<span class="absolute right-4 top-1/2 -translate-y-1/2 material-symbols-outlined text-outline">search</span>
+<input class="w-full bg-surface-container-lowest border-none py-6 pr-14 pl-6 text-xl font-medium focus:ring-2 focus:ring-secondary-container placeholder:text-outline-variant transition-all outline-none" placeholder="חפש לפי שם תרגיל..." type="text"/>
+<div class="absolute bottom-0 left-0 h-[2px] w-0 bg-secondary-container transition-all duration-300 group-focus-within:w-full"></div>
+</div>
+</section>
+<!-- Bento Style Content Layout -->
+<div class="grid grid-cols-1 md:grid-cols-12 gap-10">
+<!-- Category Sidebar -->
+<aside class="md:col-span-3 space-y-8">
+<div class="sticky top-28">
+<h3 class="text-[10px] font-bold tracking-[0.2em] uppercase text-outline mb-6">MUSCLE GROUPS</h3>
+<ul class="space-y-4">
+<li><a class="text-lg font-bold hover:text-secondary transition-colors block border-r-4 border-secondary-container pr-4" href="#">הכל</a></li>
+<li><a class="text-lg font-medium opacity-50 hover:opacity-100 transition-opacity block pr-5" href="#">חזה</a></li>
+<li><a class="text-lg font-medium opacity-50 hover:opacity-100 transition-opacity block pr-5" href="#">גב</a></li>
+<li><a class="text-lg font-medium opacity-50 hover:opacity-100 transition-opacity block pr-5" href="#">רגליים</a></li>
+<li><a class="text-lg font-medium opacity-50 hover:opacity-100 transition-opacity block pr-5" href="#">כתפיים</a></li>
+<li><a class="text-lg font-medium opacity-50 hover:opacity-100 transition-opacity block pr-5" href="#">ידיים</a></li>
+</ul>
+</div>
+</aside>
+<!-- Exercise Lists -->
+<div class="md:col-span-9 space-y-16">
+<!-- Group: Chest -->
+<article>
+<div class="flex items-center justify-between border-b-2 border-on-surface mb-6 pb-2">
+<h4 class="text-2xl font-black uppercase tracking-tight">חזה / CHEST</h4>
+<span class="text-xs font-bold bg-surface-container px-2 py-1">04 תרגילים</span>
+</div>
+<div class="flex flex-col gap-2">
+<div class="group flex items-center justify-between p-5 bg-surface-container-low hover:bg-secondary-container transition-colors cursor-pointer">
+<span class="text-xl font-bold tracking-tight">לחיצת חזה במוט</span>
+<span class="material-symbols-outlined opacity-0 group-hover:opacity-100 transition-opacity">chevron_left</span>
+</div>
+<div class="group flex items-center justify-between p-5 bg-surface-container-low hover:bg-secondary-container transition-colors cursor-pointer">
+<span class="text-xl font-bold tracking-tight">לחיצת חזה עם משקולות בשיפוע חיובי</span>
+<span class="material-symbols-outlined opacity-0 group-hover:opacity-100 transition-opacity">chevron_left</span>
+</div>
+<div class="group flex items-center justify-between p-5 bg-surface-container-low hover:bg-secondary-container transition-colors cursor-pointer">
+<span class="text-xl font-bold tracking-tight">פרפר עם כבלים</span>
+<span class="material-symbols-outlined opacity-0 group-hover:opacity-100 transition-opacity">chevron_left</span>
+</div>
+<div class="group flex items-center justify-between p-5 bg-surface-container-low hover:bg-secondary-container transition-colors cursor-pointer">
+<span class="text-xl font-bold tracking-tight">שכיבות סמיכה</span>
+<span class="material-symbols-outlined opacity-0 group-hover:opacity-100 transition-opacity">chevron_left</span>
+</div>
+</div>
+</article>
+<!-- Group: Back -->
+<article>
+<div class="flex items-center justify-between border-b-2 border-on-surface mb-6 pb-2">
+<h4 class="text-2xl font-black uppercase tracking-tight">גב / BACK</h4>
+<span class="text-xs font-bold bg-surface-container px-2 py-1">03 תרגילים</span>
+</div>
+<div class="flex flex-col gap-2">
+<div class="group flex items-center justify-between p-5 bg-surface-container-low hover:bg-secondary-container transition-colors cursor-pointer">
+<span class="text-xl font-bold tracking-tight">מתח רחב</span>
+<span class="material-symbols-outlined opacity-0 group-hover:opacity-100 transition-opacity">chevron_left</span>
+</div>
+<div class="group flex items-center justify-between p-5 bg-surface-container-low hover:bg-secondary-container transition-colors cursor-pointer">
+<span class="text-xl font-bold tracking-tight">חתירה בהטיה עם מוט</span>
+<span class="material-symbols-outlined opacity-0 group-hover:opacity-100 transition-opacity">chevron_left</span>
+</div>
+<div class="group flex items-center justify-between p-5 bg-surface-container-low hover:bg-secondary-container transition-colors cursor-pointer">
+<span class="text-xl font-bold tracking-tight">משיכת פולי עליון</span>
+<span class="material-symbols-outlined opacity-0 group-hover:opacity-100 transition-opacity">chevron_left</span>
+</div>
+</div>
+</article>
+<!-- Group: Legs -->
+<article>
+<div class="flex items-center justify-between border-b-2 border-on-surface mb-6 pb-2">
+<h4 class="text-2xl font-black uppercase tracking-tight">רגליים / LEGS</h4>
+<span class="text-xs font-bold bg-surface-container px-2 py-1">03 תרגילים</span>
+</div>
+<div class="flex flex-col gap-2">
+<div class="group flex items-center justify-between p-5 bg-surface-container-low hover:bg-secondary-container transition-colors cursor-pointer">
+<span class="text-xl font-bold tracking-tight">סקוואט עם מוט</span>
+<span class="material-symbols-outlined opacity-0 group-hover:opacity-100 transition-opacity">chevron_left</span>
+</div>
+<div class="group flex items-center justify-between p-5 bg-surface-container-low hover:bg-secondary-container transition-colors cursor-pointer">
+<span class="text-xl font-bold tracking-tight">לאנג'ים עם משקולות</span>
+<span class="material-symbols-outlined opacity-0 group-hover:opacity-100 transition-opacity">chevron_left</span>
+</div>
+<div class="group flex items-center justify-between p-5 bg-surface-container-low hover:bg-secondary-container transition-colors cursor-pointer">
+<span class="text-xl font-bold tracking-tight">פשיטת ברכיים במכונה</span>
+<span class="material-symbols-outlined opacity-0 group-hover:opacity-100 transition-opacity">chevron_left</span>
+</div>
+</div>
+</article>
+</div>
+</div>
+</main>
+<!-- Bottom Navigation Shell -->
+<nav class="fixed bottom-0 left-0 w-full flex justify-around items-stretch h-20 px-0 pb-safe bg-[#f6f6f6] dark:bg-[#1a1c1c] z-50">
+<a class="flex flex-col items-center justify-center text-[#2d2f2f] dark:text-[#f6f6f6] p-3 opacity-70 hover:bg-[#dbdddd] dark:hover:bg-[#3d3f3f] flex-1" href="#">
+<span class="material-symbols-outlined" data-icon="copy_all">copy_all</span>
+<span class="font-['Space_Grotesk'] text-[10px] font-bold tracking-widest uppercase">Templates</span>
+</a>
+<a class="flex flex-col items-center justify-center text-[#2d2f2f] dark:text-[#f6f6f6] p-3 opacity-70 hover:bg-[#dbdddd] dark:hover:bg-[#3d3f3f] flex-1" href="#">
+<span class="material-symbols-outlined" data-icon="fitness_center">fitness_center</span>
+<span class="font-['Space_Grotesk'] text-[10px] font-bold tracking-widest uppercase">Workout</span>
+</a>
+<a class="flex flex-col items-center justify-center bg-[#CCFF00] text-[#2d2f2f] p-3 h-full flex-1" href="#">
+<span class="material-symbols-outlined" data-icon="local_library">local_library</span>
+<span class="font-['Space_Grotesk'] text-[10px] font-bold tracking-widest uppercase">Library</span>
+</a>
+<a class="flex flex-col items-center justify-center text-[#2d2f2f] dark:text-[#f6f6f6] p-3 opacity-70 hover:bg-[#dbdddd] dark:hover:bg-[#3d3f3f] flex-1" href="#">
+<span class="material-symbols-outlined" data-icon="history">history</span>
+<span class="font-['Space_Grotesk'] text-[10px] font-bold tracking-widest uppercase">History</span>
+</a>
+</nav>
+</body></html>
