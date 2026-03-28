@@ -8,6 +8,7 @@ import {
   TouchableOpacity,
   Alert,
   Platform,
+  useWindowDimensions,
 } from 'react-native';
 import { Swipeable } from 'react-native-gesture-handler';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -23,7 +24,10 @@ export default function WorkoutScreen() {
   const { colors } = useTheme();
   const { t, isRTL, language, fontBold, fontRegular } = useTranslation();
   const insets = useSafeAreaInsets();
+  const { width: screenWidth } = useWindowDimensions();
   const router = useRouter();
+  const isCompactWidth = screenWidth < 390;
+  const isVeryCompactWidth = screenWidth < 360;
 
   const activeWorkout = useAppStore((s) => s.activeWorkout);
   const exercises = useAppStore((s) => s.exercises);
@@ -397,6 +401,7 @@ export default function WorkoutScreen() {
                   <View
                     style={[
                       styles.setRow,
+                      isCompactWidth && styles.setRowCompact,
                       {
                         backgroundColor: isCompleted ? colors.surfaceContainerLow : colors.surfaceContainerHighest,
                         borderLeftColor: isCompleted ? colors.primaryDim : 'transparent',
@@ -406,20 +411,20 @@ export default function WorkoutScreen() {
                       },
                     ]}
                   >
-                    <View style={styles.setNumberContainer}>
-                      <Text style={[styles.setNumber, { color: isActive ? colors.primary : colors.outlineVariant, fontFamily: fontBold }]}>
+                    <View style={[styles.setNumberContainer, isCompactWidth && styles.setNumberContainerCompact]}>
+                      <Text style={[styles.setNumber, isVeryCompactWidth && styles.setNumberVeryCompact, { color: isActive ? colors.primary : colors.outlineVariant, fontFamily: fontBold }]}>
                         {setIdx + 1}
                       </Text>
                     </View>
 
                     <View style={styles.inputsContainer}>
                       <View style={styles.inputGroup}>
-                        <Text style={[styles.inputLabel, { color: isActive ? colors.primary : colors.outlineVariant, textAlign: isRTL ? 'right' : 'left', fontFamily: fontBold }]}>
+                        <Text style={[styles.inputLabel, isVeryCompactWidth && styles.inputLabelVeryCompact, { color: isActive ? colors.primary : colors.outlineVariant, textAlign: isRTL ? 'right' : 'left', fontFamily: fontBold }]}>
                           {t('weight_kg')}
                         </Text>
-                        <View style={styles.stepperRow}>
+                        <View style={[styles.stepperRow, isVeryCompactWidth && styles.stepperRowVeryCompact]}>
                           <TextInput
-                            style={[styles.input, styles.stepperInput, { backgroundColor: 'transparent', color: colors.onSurface, fontFamily: fontBold }]}
+                            style={[styles.input, styles.stepperInput, isVeryCompactWidth && styles.stepperInputVeryCompact, { backgroundColor: 'transparent', color: colors.onSurface, fontFamily: fontBold }]}
                             value={set.weight?.toString() ?? ''}
                             onChangeText={(v) => updateSet(exIdx, setIdx, 'weight', v ? parseFloat(v) : null)}
                             placeholder={lastSet?.weight?.toString() ?? '--'}
@@ -429,34 +434,34 @@ export default function WorkoutScreen() {
                           />
                           <View style={styles.stepperButtonsColumn}>
                             <TouchableOpacity
-                              style={[styles.stepperBtnSmall, { backgroundColor: isActive ? colors.surfaceContainer : 'transparent', opacity: isCompleted ? 0.4 : 1 }]}
+                              style={[styles.stepperBtnSmall, isVeryCompactWidth && styles.stepperBtnVeryCompact, { backgroundColor: isActive ? colors.surfaceContainer : 'transparent', opacity: isCompleted ? 0.4 : 1 }]}
                               onPress={() => !isCompleted && updateSet(exIdx, setIdx, 'weight', (set.weight ?? 0) + 2.5)}
                               disabled={isCompleted}
                             >
-                              <MaterialIcons name="add" size={14} color={colors.onSurface} />
+                              <MaterialIcons name="add" size={isVeryCompactWidth ? 12 : 14} color={colors.onSurface} />
                             </TouchableOpacity>
                             <TouchableOpacity
-                              style={[styles.stepperBtnSmall, { backgroundColor: isActive ? colors.surfaceContainer : 'transparent', opacity: isCompleted ? 0.4 : 1 }]}
+                              style={[styles.stepperBtnSmall, isVeryCompactWidth && styles.stepperBtnVeryCompact, { backgroundColor: isActive ? colors.surfaceContainer : 'transparent', opacity: isCompleted ? 0.4 : 1 }]}
                               onPress={() => !isCompleted && updateSet(exIdx, setIdx, 'weight', Math.max(0, (set.weight ?? 0) - 2.5))}
                               disabled={isCompleted}
                             >
-                              <MaterialIcons name="remove" size={14} color={colors.onSurface} />
+                              <MaterialIcons name="remove" size={isVeryCompactWidth ? 12 : 14} color={colors.onSurface} />
                             </TouchableOpacity>
                           </View>
                         </View>
                         {lastSet && (
-                          <Text style={[styles.lastValue, { color: colors.outlineVariant, fontFamily: fontRegular }]}>
+                          <Text style={[styles.lastValue, isVeryCompactWidth && styles.lastValueVeryCompact, { color: colors.outlineVariant, fontFamily: fontRegular }]}>
                             {t('last_time')}: {lastSet.weight ?? '--'}
                           </Text>
                         )}
                       </View>
                       <View style={styles.inputGroup}>
-                        <Text style={[styles.inputLabel, { color: isActive ? colors.primary : colors.outlineVariant, textAlign: isRTL ? 'right' : 'left', fontFamily: fontBold }]}>
+                        <Text style={[styles.inputLabel, isVeryCompactWidth && styles.inputLabelVeryCompact, { color: isActive ? colors.primary : colors.outlineVariant, textAlign: isRTL ? 'right' : 'left', fontFamily: fontBold }]}>
                           {t('reps')}
                         </Text>
-                        <View style={styles.stepperRow}>
+                        <View style={[styles.stepperRow, isVeryCompactWidth && styles.stepperRowVeryCompact]}>
                           <TextInput
-                            style={[styles.input, styles.stepperInput, { backgroundColor: 'transparent', color: colors.onSurface, fontFamily: fontBold }]}
+                            style={[styles.input, styles.stepperInput, isVeryCompactWidth && styles.stepperInputVeryCompact, { backgroundColor: 'transparent', color: colors.onSurface, fontFamily: fontBold }]}
                             value={set.reps?.toString() ?? ''}
                             onChangeText={(v) => updateSet(exIdx, setIdx, 'reps', v ? parseInt(v, 10) : null)}
                             placeholder={lastSet?.reps?.toString() ?? '--'}
@@ -466,23 +471,23 @@ export default function WorkoutScreen() {
                           />
                           <View style={styles.stepperButtonsColumn}>
                             <TouchableOpacity
-                              style={[styles.stepperBtnSmall, { backgroundColor: isActive ? colors.surfaceContainer : 'transparent', opacity: isCompleted ? 0.4 : 1 }]}
+                              style={[styles.stepperBtnSmall, isVeryCompactWidth && styles.stepperBtnVeryCompact, { backgroundColor: isActive ? colors.surfaceContainer : 'transparent', opacity: isCompleted ? 0.4 : 1 }]}
                               onPress={() => !isCompleted && updateSet(exIdx, setIdx, 'reps', (set.reps ?? 0) + 1)}
                               disabled={isCompleted}
                             >
-                              <MaterialIcons name="add" size={14} color={colors.onSurface} />
+                              <MaterialIcons name="add" size={isVeryCompactWidth ? 12 : 14} color={colors.onSurface} />
                             </TouchableOpacity>
                             <TouchableOpacity
-                              style={[styles.stepperBtnSmall, { backgroundColor: isActive ? colors.surfaceContainer : 'transparent', opacity: isCompleted ? 0.4 : 1 }]}
+                              style={[styles.stepperBtnSmall, isVeryCompactWidth && styles.stepperBtnVeryCompact, { backgroundColor: isActive ? colors.surfaceContainer : 'transparent', opacity: isCompleted ? 0.4 : 1 }]}
                               onPress={() => !isCompleted && updateSet(exIdx, setIdx, 'reps', Math.max(0, (set.reps ?? 0) - 1))}
                               disabled={isCompleted}
                             >
-                              <MaterialIcons name="remove" size={14} color={colors.onSurface} />
+                              <MaterialIcons name="remove" size={isVeryCompactWidth ? 12 : 14} color={colors.onSurface} />
                             </TouchableOpacity>
                           </View>
                         </View>
                         {lastSet && (
-                          <Text style={[styles.lastValue, { color: colors.outlineVariant, fontFamily: fontRegular }]}>
+                          <Text style={[styles.lastValue, isVeryCompactWidth && styles.lastValueVeryCompact, { color: colors.outlineVariant, fontFamily: fontRegular }]}>
                             {t('last_time')}: {lastSet.reps ?? '--'}
                           </Text>
                         )}
@@ -490,11 +495,16 @@ export default function WorkoutScreen() {
                     </View>
 
                     <TouchableOpacity
-                      style={[styles.checkBtn, { backgroundColor: isCompleted ? colors.primary : colors.surfaceContainer, borderColor: isCompleted ? colors.primary : colors.outlineVariant }]}
+                      style={[
+                        styles.checkBtn,
+                        isCompactWidth && styles.checkBtnCompact,
+                        isVeryCompactWidth && styles.checkBtnVeryCompact,
+                        { backgroundColor: isCompleted ? colors.primary : colors.surfaceContainer, borderColor: isCompleted ? colors.primary : colors.outlineVariant },
+                      ]}
                       onPress={() => handleComplete(exIdx, setIdx)}
                       activeOpacity={0.7}
                     >
-                      <MaterialIcons name="check" size={24} color={isCompleted ? colors.onPrimary : colors.outlineVariant} />
+                      <MaterialIcons name="check" size={isVeryCompactWidth ? 20 : 24} color={isCompleted ? colors.onPrimary : colors.outlineVariant} />
                     </TouchableOpacity>
                   </View>
                   </Swipeable>
@@ -643,19 +653,29 @@ const styles = StyleSheet.create({
   exerciseLabel: { fontFamily: 'SpaceGrotesk_700Bold', fontSize: 10, textTransform: 'uppercase', letterSpacing: 2 },
   exerciseName: { fontFamily: 'SpaceGrotesk_700Bold', fontSize: 26, textTransform: 'uppercase', letterSpacing: -0.5 },
   setRow: { flexDirection: 'row', alignItems: 'center', borderRadius: 12, padding: 14, marginBottom: 8, gap: 12 },
+  setRowCompact: { paddingHorizontal: 10, paddingVertical: 12, gap: 8 },
   setNumberContainer: { width: 36, alignItems: 'center' },
+  setNumberContainerCompact: { width: 28 },
   setNumber: { fontFamily: 'SpaceGrotesk_700Bold', fontSize: 22 },
-  inputsContainer: { flex: 1, flexDirection: 'row', gap: 12 },
-  inputGroup: { flex: 1 },
+  setNumberVeryCompact: { fontSize: 18 },
+  inputsContainer: { flex: 1, flexDirection: 'row', gap: 8, minWidth: 0 },
+  inputGroup: { flex: 1, minWidth: 0 },
   inputLabel: { fontFamily: 'SpaceGrotesk_700Bold', fontSize: 9, textTransform: 'uppercase', letterSpacing: 2, marginBottom: 4 },
+  inputLabelVeryCompact: { fontSize: 8, letterSpacing: 1.4 },
   input: { fontFamily: 'SpaceGrotesk_700Bold', fontSize: 22, borderRadius: 8, padding: 8, textAlign: 'center' },
   stepperRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  stepperRowVeryCompact: { gap: 4 },
   stepperButtonsColumn: { gap: 4 },
   stepperBtnSmall: { width: 22, height: 20, borderRadius: 5, alignItems: 'center', justifyContent: 'center' },
-  stepperInput: { flex: 1, fontSize: 18, paddingVertical: 6, paddingHorizontal: 4 },
+  stepperBtnVeryCompact: { width: 20, height: 18, borderRadius: 4 },
+  stepperInput: { flex: 1, minWidth: 0, fontSize: 18, paddingVertical: 6, paddingHorizontal: 4 },
+  stepperInputVeryCompact: { fontSize: 16, paddingVertical: 4 },
   deleteAction: { width: 72, marginBottom: 8, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   lastValue: { fontFamily: 'Manrope_400Regular', fontSize: 9, marginTop: 3 },
+  lastValueVeryCompact: { fontSize: 8 },
   checkBtn: { width: 52, height: 52, borderRadius: 12, alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
+  checkBtnCompact: { width: 44, height: 44 },
+  checkBtnVeryCompact: { width: 40, height: 40 },
   checkIcon: { fontSize: 22, fontWeight: '800' },
   addSetBtn: { borderRadius: 12, paddingVertical: 14, alignItems: 'center', marginTop: 4 },
   addSetText: { fontFamily: 'SpaceGrotesk_700Bold', fontSize: 12, textTransform: 'uppercase', letterSpacing: 1 },
