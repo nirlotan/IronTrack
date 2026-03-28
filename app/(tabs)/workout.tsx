@@ -7,6 +7,7 @@ import {
   TextInput,
   TouchableOpacity,
   Alert,
+  Platform,
 } from 'react-native';
 import { Swipeable } from 'react-native-gesture-handler';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -84,6 +85,19 @@ export default function WorkoutScreen() {
   };
 
   const handleFinish = () => {
+    if (Platform.OS === 'web') {
+      const confirmed =
+        typeof globalThis.confirm === 'function'
+          ? globalThis.confirm(t('finish_workout'))
+          : true;
+
+      if (confirmed) {
+        finishWorkout();
+        if (restIntervalRef.current) clearInterval(restIntervalRef.current);
+      }
+      return;
+    }
+
     Alert.alert(t('finish_workout'), '', [
       { text: t('cancel'), style: 'cancel' },
       {
@@ -97,6 +111,19 @@ export default function WorkoutScreen() {
   };
 
   const handleDiscard = () => {
+    if (Platform.OS === 'web') {
+      const confirmed =
+        typeof globalThis.confirm === 'function'
+          ? globalThis.confirm(`${t('discard_workout')}\n${t('discard_confirm')}`)
+          : true;
+
+      if (confirmed) {
+        discardWorkout();
+        if (restIntervalRef.current) clearInterval(restIntervalRef.current);
+      }
+      return;
+    }
+
     Alert.alert(t('discard_workout'), t('discard_confirm'), [
       { text: t('cancel'), style: 'cancel' },
       {
@@ -391,13 +418,6 @@ export default function WorkoutScreen() {
                           {t('weight_kg')}
                         </Text>
                         <View style={styles.stepperRow}>
-                          <TouchableOpacity
-                            style={[styles.stepperBtn, { backgroundColor: isActive ? colors.surfaceContainer : 'transparent', opacity: isCompleted ? 0.4 : 1 }]}
-                            onPress={() => !isCompleted && updateSet(exIdx, setIdx, 'weight', Math.max(0, (set.weight ?? 0) - 2.5))}
-                            disabled={isCompleted}
-                          >
-                            <MaterialIcons name="remove" size={16} color={colors.onSurface} />
-                          </TouchableOpacity>
                           <TextInput
                             style={[styles.input, styles.stepperInput, { backgroundColor: 'transparent', color: colors.onSurface, fontFamily: fontBold }]}
                             value={set.weight?.toString() ?? ''}
@@ -407,13 +427,22 @@ export default function WorkoutScreen() {
                             keyboardType="numeric"
                             editable={!isCompleted}
                           />
-                          <TouchableOpacity
-                            style={[styles.stepperBtn, { backgroundColor: isActive ? colors.surfaceContainer : 'transparent', opacity: isCompleted ? 0.4 : 1 }]}
-                            onPress={() => !isCompleted && updateSet(exIdx, setIdx, 'weight', (set.weight ?? 0) + 2.5)}
-                            disabled={isCompleted}
-                          >
-                            <MaterialIcons name="add" size={16} color={colors.onSurface} />
-                          </TouchableOpacity>
+                          <View style={styles.stepperButtonsColumn}>
+                            <TouchableOpacity
+                              style={[styles.stepperBtnSmall, { backgroundColor: isActive ? colors.surfaceContainer : 'transparent', opacity: isCompleted ? 0.4 : 1 }]}
+                              onPress={() => !isCompleted && updateSet(exIdx, setIdx, 'weight', (set.weight ?? 0) + 2.5)}
+                              disabled={isCompleted}
+                            >
+                              <MaterialIcons name="add" size={14} color={colors.onSurface} />
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                              style={[styles.stepperBtnSmall, { backgroundColor: isActive ? colors.surfaceContainer : 'transparent', opacity: isCompleted ? 0.4 : 1 }]}
+                              onPress={() => !isCompleted && updateSet(exIdx, setIdx, 'weight', Math.max(0, (set.weight ?? 0) - 2.5))}
+                              disabled={isCompleted}
+                            >
+                              <MaterialIcons name="remove" size={14} color={colors.onSurface} />
+                            </TouchableOpacity>
+                          </View>
                         </View>
                         {lastSet && (
                           <Text style={[styles.lastValue, { color: colors.outlineVariant, fontFamily: fontRegular }]}>
@@ -426,13 +455,6 @@ export default function WorkoutScreen() {
                           {t('reps')}
                         </Text>
                         <View style={styles.stepperRow}>
-                          <TouchableOpacity
-                            style={[styles.stepperBtn, { backgroundColor: isActive ? colors.surfaceContainer : 'transparent', opacity: isCompleted ? 0.4 : 1 }]}
-                            onPress={() => !isCompleted && updateSet(exIdx, setIdx, 'reps', Math.max(0, (set.reps ?? 0) - 1))}
-                            disabled={isCompleted}
-                          >
-                            <MaterialIcons name="remove" size={16} color={colors.onSurface} />
-                          </TouchableOpacity>
                           <TextInput
                             style={[styles.input, styles.stepperInput, { backgroundColor: 'transparent', color: colors.onSurface, fontFamily: fontBold }]}
                             value={set.reps?.toString() ?? ''}
@@ -442,13 +464,22 @@ export default function WorkoutScreen() {
                             keyboardType="numeric"
                             editable={!isCompleted}
                           />
-                          <TouchableOpacity
-                            style={[styles.stepperBtn, { backgroundColor: isActive ? colors.surfaceContainer : 'transparent', opacity: isCompleted ? 0.4 : 1 }]}
-                            onPress={() => !isCompleted && updateSet(exIdx, setIdx, 'reps', (set.reps ?? 0) + 1)}
-                            disabled={isCompleted}
-                          >
-                            <MaterialIcons name="add" size={16} color={colors.onSurface} />
-                          </TouchableOpacity>
+                          <View style={styles.stepperButtonsColumn}>
+                            <TouchableOpacity
+                              style={[styles.stepperBtnSmall, { backgroundColor: isActive ? colors.surfaceContainer : 'transparent', opacity: isCompleted ? 0.4 : 1 }]}
+                              onPress={() => !isCompleted && updateSet(exIdx, setIdx, 'reps', (set.reps ?? 0) + 1)}
+                              disabled={isCompleted}
+                            >
+                              <MaterialIcons name="add" size={14} color={colors.onSurface} />
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                              style={[styles.stepperBtnSmall, { backgroundColor: isActive ? colors.surfaceContainer : 'transparent', opacity: isCompleted ? 0.4 : 1 }]}
+                              onPress={() => !isCompleted && updateSet(exIdx, setIdx, 'reps', Math.max(0, (set.reps ?? 0) - 1))}
+                              disabled={isCompleted}
+                            >
+                              <MaterialIcons name="remove" size={14} color={colors.onSurface} />
+                            </TouchableOpacity>
+                          </View>
                         </View>
                         {lastSet && (
                           <Text style={[styles.lastValue, { color: colors.outlineVariant, fontFamily: fontRegular }]}>
@@ -618,9 +649,10 @@ const styles = StyleSheet.create({
   inputGroup: { flex: 1 },
   inputLabel: { fontFamily: 'SpaceGrotesk_700Bold', fontSize: 9, textTransform: 'uppercase', letterSpacing: 2, marginBottom: 4 },
   input: { fontFamily: 'SpaceGrotesk_700Bold', fontSize: 22, borderRadius: 8, padding: 8, textAlign: 'center' },
-  stepperRow: { flexDirection: 'row', alignItems: 'center', gap: 2 },
-  stepperBtn: { width: 28, height: 36, borderRadius: 6, alignItems: 'center', justifyContent: 'center' },
-  stepperInput: { flex: 1, fontSize: 18, padding: 4 },
+  stepperRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  stepperButtonsColumn: { gap: 4 },
+  stepperBtnSmall: { width: 22, height: 20, borderRadius: 5, alignItems: 'center', justifyContent: 'center' },
+  stepperInput: { flex: 1, fontSize: 18, paddingVertical: 6, paddingHorizontal: 4 },
   deleteAction: { width: 72, marginBottom: 8, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   lastValue: { fontFamily: 'Manrope_400Regular', fontSize: 9, marginTop: 3 },
   checkBtn: { width: 52, height: 52, borderRadius: 12, alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
