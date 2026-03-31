@@ -50,10 +50,14 @@ export interface WorkoutSession {
   durationMinutes?: number;
 }
 
+export type ActiveWorkoutMode = 'draft' | 'inProgress';
+
 export interface ActiveWorkout {
   id: string;
   name: string;
   templateId?: string;
-  startTime: number;
+  mode: ActiveWorkoutMode;
+  createdAt: number;
+  startedAt?: number;
   exercises: WorkoutExercise[];
 }

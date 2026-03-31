@@ -16,14 +16,14 @@ const en = {
   skip: 'Skip',
 
   // Tabs
-  tab_templates: 'Templates',
-  tab_workout: 'Workout',
+  tab_templates: 'Workouts',
+  tab_workout: 'Previous Workouts',
   tab_library: 'Library',
   tab_history: 'History',
   tab_settings: 'Settings',
 
   // Templates
-  templates_title: 'Workout Templates',
+  templates_title: 'Workouts',
   templates_search: 'Search routines...',
   template_exercises: 'Exercises',
   template_total_sets: 'Total Sets',
@@ -31,7 +31,7 @@ const en = {
   template_name: 'Template Name',
   edit_template: 'Edit Template',
   delete_template_confirm: 'Delete this template?',
-  no_templates: 'No templates yet. Create one!',
+  no_templates: 'No workouts yet. Create one!',
 
   // Exercise Library
   library_title: 'Library',
@@ -103,6 +103,7 @@ const en = {
   add_set: 'Add Set',
   add_exercise: 'Add Exercise',
   finish_workout: 'Finish Workout',
+  start_workout: 'Start Workout',
   discard_workout: 'Discard Workout',
   discard_confirm: 'Discard this workout?',
   workout_name: 'Workout Name',

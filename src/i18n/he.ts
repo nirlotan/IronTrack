@@ -18,14 +18,14 @@ const he: Record<TranslationKeys, string> = {
   skip: 'דילוג',
 
   // Tabs
-  tab_templates: 'תבניות',
-  tab_workout: 'אימון',
+  tab_templates: 'אימונים',
+  tab_workout: 'אימונים קודמים',
   tab_library: 'ספרייה',
   tab_history: 'היסטוריה',
   tab_settings: 'הגדרות',
 
   // Templates
-  templates_title: 'תבניות אימון',
+  templates_title: 'אימונים',
   templates_search: 'חפש שגרה...',
   template_exercises: 'תרגילים',
   template_total_sets: 'סה"כ סטים',
@@ -33,7 +33,7 @@ const he: Record<TranslationKeys, string> = {
   template_name: 'שם תבנית',
   edit_template: 'עריכת תבנית',
   delete_template_confirm: 'למחוק תבנית זו?',
-  no_templates: 'אין תבניות עדיין. צור אחת!',
+  no_templates: 'אין אימונים עדיין. צור אחד!',
 
   // Exercise Library
   library_title: 'ספרייה',
@@ -105,6 +105,7 @@ const he: Record<TranslationKeys, string> = {
   add_set: 'הוסף סט',
   add_exercise: 'הוסף תרגיל',
   finish_workout: 'סיים אימון',
+  start_workout: 'התחל אימון',
   discard_workout: 'בטל אימון',
   discard_confirm: 'לבטל אימון זה?',
   workout_name: 'שם אימון',

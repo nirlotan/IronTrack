@@ -16,37 +16,6 @@ import type {
 
 type ThemeMode = 'dark' | 'light' | 'system';
 
-const defaultTemplates: WorkoutTemplate[] = [
-  {
-    id: 'tpl_push_day',
-    name: 'Push Day',
-    exercises: [
-      { exerciseId: 'ex_bench_press',     targetSets: 4, targetReps: 8  },
-      { exerciseId: 'ex_incline_bench',   targetSets: 3, targetReps: 10 },
-      { exerciseId: 'ex_overhead_press',  targetSets: 3, targetReps: 10 },
-      { exerciseId: 'ex_lateral_raise',   targetSets: 3, targetReps: 15 },
-      { exerciseId: 'ex_tricep_pushdown', targetSets: 3, targetReps: 12 },
-      { exerciseId: 'ex_cable_fly',       targetSets: 3, targetReps: 12 },
-    ],
-    createdAt: 0,
-    updatedAt: 0,
-  },
-  {
-    id: 'tpl_pull_legs',
-    name: 'Pull & Legs',
-    exercises: [
-      { exerciseId: 'ex_deadlift',             targetSets: 4, targetReps: 5  },
-      { exerciseId: 'ex_lat_pulldown',         targetSets: 4, targetReps: 10 },
-      { exerciseId: 'ex_barbell_row',          targetSets: 3, targetReps: 8  },
-      { exerciseId: 'ex_squat',                targetSets: 4, targetReps: 6  },
-      { exerciseId: 'ex_romanian_deadlift',    targetSets: 3, targetReps: 10 },
-      { exerciseId: 'ex_barbell_curl',         targetSets: 3, targetReps: 12 },
-    ],
-    createdAt: 0,
-    updatedAt: 0,
-  },
-];
-
 interface AppState {
   language: 'en' | 'he';
   themeMode: ThemeMode;
@@ -73,6 +42,8 @@ interface AppState {
   startWorkoutFromTemplate: (templateId: string) => void;
   startEmptyWorkout: () => void;
   startWorkoutFromSession: (sessionId: string) => void;
+  saveActiveWorkout: () => void;
+  startActiveWorkout: () => void;
   renameActiveWorkout: (name: string) => void;
   addExerciseToWorkout: (exerciseId: string) => void;
   addSetToExercise: (exerciseIndex: number) => void;
@@ -105,7 +76,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   themeMode: 'dark',
   restTimerSeconds: 90,
   exercises: defaultExercises,
-  templates: defaultTemplates,
+  templates: [],
   sessions: [],
   activeWorkout: null,
 
@@ -160,15 +131,12 @@ export const useAppStore = create<AppState>((set, get) => ({
     const template = get().templates.find((t) => t.id === templateId);
     if (!template) return;
 
-    const lastSession = get().getLastSessionForTemplate(templateId);
-
     const exercises: WorkoutExercise[] = template.exercises.map((te) => {
-      const lastExSets = lastSession?.exercises.find((e) => e.exerciseId === te.exerciseId)?.sets;
-      const sets: SetRecord[] = Array.from({ length: te.targetSets }, (_, i) => ({
+      const sets: SetRecord[] = Array.from({ length: te.targetSets }, () => ({
         id: uuid(),
         exerciseId: te.exerciseId,
-        weight: null,
-        reps: null,
+        weight: te.lastWeight ?? null,
+        reps: te.lastReps ?? te.targetReps,
         isCompleted: false,
       }));
       return { exerciseId: te.exerciseId, sets };
@@ -178,7 +146,9 @@ export const useAppStore = create<AppState>((set, get) => ({
       id: uuid(),
       name: template.name,
       templateId,
-      startTime: Date.now(),
+      mode: 'inProgress',
+      createdAt: Date.now(),
+      startedAt: Date.now(),
       exercises,
     };
     set({ activeWorkout: workout });
@@ -189,7 +159,8 @@ export const useAppStore = create<AppState>((set, get) => ({
     const workout: ActiveWorkout = {
       id: uuid(),
       name: '',
-      startTime: Date.now(),
+      mode: 'draft',
+      createdAt: Date.now(),
       exercises: [],
     };
     set({ activeWorkout: workout });
@@ -205,8 +176,8 @@ export const useAppStore = create<AppState>((set, get) => ({
       sets: se.sets.map((s) => ({
         id: uuid(),
         exerciseId: se.exerciseId,
-        weight: null,
-        reps: null,
+        weight: s.weight,
+        reps: s.reps,
         isCompleted: false,
       })),
     }));
@@ -215,16 +186,82 @@ export const useAppStore = create<AppState>((set, get) => ({
       id: uuid(),
       name: session.name,
       templateId: session.templateId,
-      startTime: Date.now(),
+      mode: 'inProgress',
+      createdAt: Date.now(),
+      startedAt: Date.now(),
       exercises,
     };
     set({ activeWorkout: workout });
     setJSON(KEYS.activeWorkout, workout);
   },
 
+  saveActiveWorkout: () => {
+    const aw = get().activeWorkout;
+    if (!aw || aw.exercises.length === 0) return;
+
+    const now = Date.now();
+    const templateId = aw.templateId ?? `tpl_${uuid()}`;
+    const existing = get().templates.find((t) => t.id === templateId);
+
+    const template: WorkoutTemplate = {
+      id: templateId,
+      name: aw.name || 'Workout',
+      exercises: aw.exercises.map((ex) => {
+        const lastSet = ex.sets[ex.sets.length - 1];
+        return {
+          exerciseId: ex.exerciseId,
+          targetSets: ex.sets.length,
+          targetReps: lastSet?.reps ?? 10,
+          lastWeight: lastSet?.weight ?? undefined,
+          lastReps: lastSet?.reps ?? undefined,
+        };
+      }),
+      createdAt: existing?.createdAt ?? now,
+      updatedAt: now,
+    };
+
+    const templates = existing
+      ? get().templates.map((t) => (t.id === template.id ? template : t))
+      : [template, ...get().templates];
+
+    const updatedActiveWorkout: ActiveWorkout = {
+      ...aw,
+      templateId: template.id,
+      name: template.name,
+    };
+
+    set({ templates, activeWorkout: updatedActiveWorkout });
+    setJSON(KEYS.templates, templates);
+    setJSON(KEYS.activeWorkout, updatedActiveWorkout);
+  },
+
+  startActiveWorkout: () => {
+    const aw = get().activeWorkout;
+    if (!aw || aw.mode !== 'draft') return;
+
+    if (aw.exercises.length === 0) return;
+
+    get().saveActiveWorkout();
+    const latest = get().activeWorkout;
+    if (!latest) return;
+
+    const startedWorkout: ActiveWorkout = {
+      ...latest,
+      mode: 'inProgress',
+      startedAt: Date.now(),
+      exercises: latest.exercises.map((ex) => ({
+        ...ex,
+        sets: ex.sets.map((s) => ({ ...s, isCompleted: false })),
+      })),
+    };
+
+    set({ activeWorkout: startedWorkout });
+    setJSON(KEYS.activeWorkout, startedWorkout);
+  },
+
   renameActiveWorkout: (name) => {
     const aw = get().activeWorkout;
-    if (!aw) return;
+    if (!aw || aw.mode !== 'draft') return;
     const updated = { ...aw, name };
     set({ activeWorkout: updated });
     setJSON(KEYS.activeWorkout, updated);
@@ -232,17 +269,25 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   addExerciseToWorkout: (exerciseId) => {
     const aw = get().activeWorkout;
-    if (!aw) return;
+    if (!aw || aw.mode !== 'draft') return;
+
+    const templateExercise = aw.templateId
+      ? get()
+          .templates
+          .find((t) => t.id === aw.templateId)
+          ?.exercises.find((ex) => ex.exerciseId === exerciseId)
+      : null;
+
     const newSet: SetRecord = {
       id: uuid(),
       exerciseId,
-      weight: null,
-      reps: null,
+      weight: templateExercise?.lastWeight ?? null,
+      reps: templateExercise?.lastReps ?? templateExercise?.targetReps ?? null,
       isCompleted: false,
     };
     const updated = {
       ...aw,
-      exercises: [...aw.exercises, { exerciseId, sets: [newSet, { ...newSet, id: uuid() }, { ...newSet, id: uuid() }] }],
+      exercises: [...aw.exercises, { exerciseId, sets: [newSet] }],
     };
     set({ activeWorkout: updated });
     setJSON(KEYS.activeWorkout, updated);
@@ -250,16 +295,17 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   addSetToExercise: (exerciseIndex) => {
     const aw = get().activeWorkout;
-    if (!aw) return;
+    if (!aw || aw.mode !== 'draft') return;
     const exercises = [...aw.exercises];
     const exercise = { ...exercises[exerciseIndex] };
+    const lastSet = exercise.sets[exercise.sets.length - 1];
     exercise.sets = [
       ...exercise.sets,
       {
         id: uuid(),
         exerciseId: exercise.exerciseId,
-        weight: null,
-        reps: null,
+        weight: lastSet?.weight ?? null,
+        reps: lastSet?.reps ?? null,
         isCompleted: false,
       },
     ];
@@ -271,7 +317,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   removeSet: (exerciseIndex, setIndex) => {
     const aw = get().activeWorkout;
-    if (!aw) return;
+    if (!aw || aw.mode !== 'draft') return;
     const exercises = [...aw.exercises];
     const exercise = { ...exercises[exerciseIndex] };
     exercise.sets = exercise.sets.filter((_, i) => i !== setIndex);
@@ -283,7 +329,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   updateSet: (exerciseIndex, setIndex, field, value) => {
     const aw = get().activeWorkout;
-    if (!aw) return;
+    if (!aw || (aw.mode !== 'draft' && aw.mode !== 'inProgress')) return;
     const exercises = [...aw.exercises];
     const exercise = { ...exercises[exerciseIndex] };
     const sets = [...exercise.sets];
@@ -297,7 +343,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   toggleSetComplete: (exerciseIndex, setIndex) => {
     const aw = get().activeWorkout;
-    if (!aw) return;
+    if (!aw || aw.mode !== 'inProgress') return;
     const exercises = [...aw.exercises];
     const exercise = { ...exercises[exerciseIndex] };
     const sets = [...exercise.sets];
@@ -311,9 +357,11 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   finishWorkout: () => {
     const aw = get().activeWorkout;
-    if (!aw) return;
+    if (!aw || aw.mode !== 'inProgress') return;
+
+    const startTime = aw.startedAt ?? Date.now();
     const endTime = Date.now();
-    const durationMinutes = Math.round((endTime - aw.startTime) / 60000);
+    const durationMinutes = Math.round((endTime - startTime) / 60000);
     let totalVolume = 0;
     for (const ex of aw.exercises) {
       for (const s of ex.sets) {
@@ -322,11 +370,12 @@ export const useAppStore = create<AppState>((set, get) => ({
         }
       }
     }
+
     const session: WorkoutSession = {
       id: aw.id,
       name: aw.name || 'Workout',
       date: new Date().toISOString().split('T')[0],
-      startTime: aw.startTime,
+      startTime,
       endTime,
       templateId: aw.templateId,
       exercises: aw.exercises,
@@ -337,28 +386,6 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({ sessions, activeWorkout: null });
     setJSON(KEYS.sessions, sessions);
     setJSON(KEYS.activeWorkout, null);
-
-    // Update template with last used data
-    if (aw.templateId) {
-      const template = get().templates.find((t) => t.id === aw.templateId);
-      if (template) {
-        const updatedExercises = template.exercises.map((te) => {
-          const sessionEx = aw.exercises.find((e) => e.exerciseId === te.exerciseId);
-          if (sessionEx) {
-            const completedSets = sessionEx.sets.filter((s) => s.isCompleted);
-            const lastSet = completedSets[completedSets.length - 1];
-            return {
-              ...te,
-              targetSets: sessionEx.sets.length,
-              lastWeight: lastSet?.weight ?? te.lastWeight,
-              lastReps: lastSet?.reps ?? te.lastReps,
-            };
-          }
-          return te;
-        });
-        get().updateTemplate({ ...template, exercises: updatedExercises, updatedAt: Date.now() });
-      }
-    }
   },
 
   discardWorkout: () => {
@@ -386,9 +413,18 @@ export const useAppStore = create<AppState>((set, get) => ({
     const theme = getJSON<ThemeMode>(KEYS.theme);
     const restTimer = getJSON<number>(KEYS.restTimer);
     const customExercises = getJSON<Exercise[]>(KEYS.exercises) ?? [];
-    const templates = getJSON<WorkoutTemplate[]>(KEYS.templates) ?? defaultTemplates;
+    const templates = getJSON<WorkoutTemplate[]>(KEYS.templates) ?? [];
     const sessions = getJSON<WorkoutSession[]>(KEYS.sessions) ?? [];
-    const activeWorkout = getJSON<ActiveWorkout>(KEYS.activeWorkout);
+    const storedActiveWorkout = getJSON<ActiveWorkout & { startTime?: number; mode?: 'draft' | 'inProgress'; createdAt?: number; startedAt?: number }>(KEYS.activeWorkout);
+
+    const activeWorkout = storedActiveWorkout
+      ? {
+          ...storedActiveWorkout,
+          mode: storedActiveWorkout.mode ?? 'inProgress',
+          createdAt: storedActiveWorkout.createdAt ?? storedActiveWorkout.startTime ?? Date.now(),
+          startedAt: storedActiveWorkout.startedAt ?? storedActiveWorkout.startTime,
+        }
+      : null;
 
     set({
       language: language ?? 'he',

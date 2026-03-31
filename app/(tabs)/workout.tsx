@@ -33,8 +33,9 @@ export default function WorkoutScreen() {
   const exercises = useAppStore((s) => s.exercises);
   const sessions = useAppStore((s) => s.sessions);
   const restTimerSeconds = useAppStore((s) => s.restTimerSeconds);
-  const startEmptyWorkout = useAppStore((s) => s.startEmptyWorkout);
   const startWorkoutFromSession = useAppStore((s) => s.startWorkoutFromSession);
+  const saveActiveWorkout = useAppStore((s) => s.saveActiveWorkout);
+  const startActiveWorkout = useAppStore((s) => s.startActiveWorkout);
   const renameActiveWorkout = useAppStore((s) => s.renameActiveWorkout);
   const updateSet = useAppStore((s) => s.updateSet);
   const removeSet = useAppStore((s) => s.removeSet);
@@ -55,12 +56,26 @@ export default function WorkoutScreen() {
   const [elapsed, setElapsed] = useState(0);
 
   useEffect(() => {
-    if (!activeWorkout) return;
+    if (!activeWorkout || activeWorkout.mode !== 'inProgress' || !activeWorkout.startedAt) {
+      setElapsed(0);
+      return;
+    }
+
     const interval = setInterval(() => {
-      setElapsed(Math.floor((Date.now() - activeWorkout.startTime) / 1000));
+      setElapsed(Math.floor((Date.now() - activeWorkout.startedAt!) / 1000));
     }, 1000);
     return () => clearInterval(interval);
-  }, [activeWorkout?.startTime]);
+  }, [activeWorkout?.startedAt, activeWorkout?.mode]);
+
+  useEffect(() => {
+    // Clear stale rest timer state when switching to another workout instance.
+    if (restIntervalRef.current) {
+      clearInterval(restIntervalRef.current);
+      restIntervalRef.current = null;
+    }
+    setIsResting(false);
+    setRestTimeLeft(0);
+  }, [activeWorkout?.id]);
 
   const startRestTimer = useCallback(() => {
     setRestTimeLeft(restTimerSeconds);
@@ -80,6 +95,7 @@ export default function WorkoutScreen() {
   }, [restTimerSeconds]);
 
   const handleComplete = (exIdx: number, setIdx: number) => {
+    if (activeWorkout?.mode !== 'inProgress') return;
     toggleSetComplete(exIdx, setIdx);
     const set = activeWorkout?.exercises[exIdx]?.sets[setIdx];
     if (set && !set.isCompleted) {
@@ -89,6 +105,7 @@ export default function WorkoutScreen() {
   };
 
   const handleFinish = () => {
+    if (activeWorkout?.mode !== 'inProgress') return;
     if (Platform.OS === 'web') {
       const confirmed =
         typeof globalThis.confirm === 'function'
@@ -145,6 +162,25 @@ export default function WorkoutScreen() {
     startWorkoutFromSession(sessionId);
   };
 
+  const handleSave = () => {
+    if (!activeWorkout || activeWorkout.exercises.length === 0) {
+      Alert.alert(t('save'), t('add_exercise'));
+      return;
+    }
+
+    saveActiveWorkout();
+    router.push('/(tabs)');
+  };
+
+  const handleStartWorkout = () => {
+    if (!activeWorkout || activeWorkout.exercises.length === 0) {
+      Alert.alert(t('start_workout'), t('add_exercise'));
+      return;
+    }
+
+    startActiveWorkout();
+  };
+
   const getExName = (id: string) => {
     const ex = exercises.find((e) => e.id === id);
     return ex ? getExerciseName(ex, t, language) : id;
@@ -182,18 +218,6 @@ export default function WorkoutScreen() {
               onChangeText={setSearch}
             />
           </View>
-
-          {/* New Workout Button */}
-          <TouchableOpacity
-            style={[styles.startBtn, { backgroundColor: colors.primaryContainer }]}
-            onPress={startEmptyWorkout}
-            activeOpacity={0.8}
-          >
-            <MaterialIcons name="add" size={22} color={colors.onPrimaryContainer} />
-            <Text style={[styles.startBtnText, { color: colors.onPrimaryContainer, fontFamily: fontBold }]}>
-              {t('new_workout')}
-            </Text>
-          </TouchableOpacity>
 
           {/* Recent workouts label */}
           <Text style={[styles.sectionTitle, { color: colors.onSurface, textAlign: isRTL ? 'right' : 'left', fontFamily: fontBold, marginBottom: 16 }]}>
@@ -290,6 +314,9 @@ export default function WorkoutScreen() {
   const getExerciseInfo = (exerciseId: string) =>
     exercises.find((e) => e.id === exerciseId);
 
+  const isDraftWorkout = activeWorkout.mode === 'draft';
+  const isInProgressWorkout = activeWorkout.mode === 'inProgress';
+
   return (
     <ScreenBackground style={styles.container}>
       {/* Header */}
@@ -306,21 +333,37 @@ export default function WorkoutScreen() {
             placeholder={t('new_workout')}
             placeholderTextColor={colors.outlineVariant}
             textAlign="center"
+            editable={isDraftWorkout}
           />
 
           <TouchableOpacity
             style={[styles.finishBtn, { backgroundColor: colors.primaryContainer }]}
-            onPress={handleFinish}
+            onPress={isDraftWorkout ? handleSave : handleFinish}
           >
             <Text style={[styles.finishBtnText, { color: colors.onPrimaryContainer, fontFamily: fontBold }]}>
-              {t('finish')}
+              {isDraftWorkout ? t('save') : t('finish')}
             </Text>
           </TouchableOpacity>
         </View>
 
-        <Text style={[styles.elapsedTimer, { color: colors.outlineVariant }]}>
-          {formatTimer(elapsed)}
-        </Text>
+        {isInProgressWorkout && (
+          <Text style={[styles.elapsedTimer, { color: colors.outlineVariant }]}> 
+            {formatTimer(elapsed)}
+          </Text>
+        )}
+
+        {isDraftWorkout && (
+          <TouchableOpacity
+            style={[styles.startBtn, { backgroundColor: colors.primaryContainer }]}
+            onPress={handleStartWorkout}
+            activeOpacity={0.8}
+          >
+            <MaterialIcons name="play-arrow" size={18} color={colors.onPrimaryContainer} />
+            <Text style={[styles.startBtnText, { color: colors.onPrimaryContainer, fontFamily: fontBold }]}>
+              {t('start_workout')}
+            </Text>
+          </TouchableOpacity>
+        )}
       </View>
 
       <ScrollView
@@ -330,7 +373,7 @@ export default function WorkoutScreen() {
         keyboardShouldPersistTaps="handled"
       >
         {/* Rest Timer */}
-        {isResting && (
+        {isInProgressWorkout && isResting && (
           <View style={[styles.restTimerContainer, { backgroundColor: colors.surfaceContainerLow }]}>
             <Text style={[styles.restTimerLabel, { color: colors.outlineVariant }]}>
               {t('rest_timer')}
@@ -386,12 +429,16 @@ export default function WorkoutScreen() {
                   </View>
                 );
 
+                const canEditSetValues = isDraftWorkout || isInProgressWorkout;
+
                 return (
                   <Swipeable
                     key={set.id}
                     renderRightActions={renderDeleteAction}
                     renderLeftActions={renderDeleteAction}
+                    enabled={isDraftWorkout}
                     onSwipeableOpen={() => {
+                      if (!isDraftWorkout) return;
                       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
                       removeSet(exIdx, setIdx);
                     }}
@@ -430,20 +477,20 @@ export default function WorkoutScreen() {
                             placeholder={lastSet?.weight?.toString() ?? '--'}
                             placeholderTextColor={colors.outlineVariant}
                             keyboardType="numeric"
-                            editable={!isCompleted}
+                            editable={canEditSetValues}
                           />
                           <View style={styles.stepperButtonsColumn}>
                             <TouchableOpacity
-                              style={[styles.stepperBtnSmall, isVeryCompactWidth && styles.stepperBtnVeryCompact, { backgroundColor: isActive ? colors.surfaceContainer : 'transparent', opacity: isCompleted ? 0.4 : 1 }]}
-                              onPress={() => !isCompleted && updateSet(exIdx, setIdx, 'weight', (set.weight ?? 0) + 2.5)}
-                              disabled={isCompleted}
+                              style={[styles.stepperBtnSmall, isVeryCompactWidth && styles.stepperBtnVeryCompact, { backgroundColor: isActive ? colors.surfaceContainer : 'transparent', opacity: canEditSetValues ? 1 : 0.4 }]}
+                              onPress={() => canEditSetValues && updateSet(exIdx, setIdx, 'weight', (set.weight ?? 0) + 2.5)}
+                              disabled={!canEditSetValues}
                             >
                               <MaterialIcons name="add" size={isVeryCompactWidth ? 12 : 14} color={colors.onSurface} />
                             </TouchableOpacity>
                             <TouchableOpacity
-                              style={[styles.stepperBtnSmall, isVeryCompactWidth && styles.stepperBtnVeryCompact, { backgroundColor: isActive ? colors.surfaceContainer : 'transparent', opacity: isCompleted ? 0.4 : 1 }]}
-                              onPress={() => !isCompleted && updateSet(exIdx, setIdx, 'weight', Math.max(0, (set.weight ?? 0) - 2.5))}
-                              disabled={isCompleted}
+                              style={[styles.stepperBtnSmall, isVeryCompactWidth && styles.stepperBtnVeryCompact, { backgroundColor: isActive ? colors.surfaceContainer : 'transparent', opacity: canEditSetValues ? 1 : 0.4 }]}
+                              onPress={() => canEditSetValues && updateSet(exIdx, setIdx, 'weight', Math.max(0, (set.weight ?? 0) - 2.5))}
+                              disabled={!canEditSetValues}
                             >
                               <MaterialIcons name="remove" size={isVeryCompactWidth ? 12 : 14} color={colors.onSurface} />
                             </TouchableOpacity>
@@ -467,20 +514,20 @@ export default function WorkoutScreen() {
                             placeholder={lastSet?.reps?.toString() ?? '--'}
                             placeholderTextColor={colors.outlineVariant}
                             keyboardType="numeric"
-                            editable={!isCompleted}
+                            editable={canEditSetValues}
                           />
                           <View style={styles.stepperButtonsColumn}>
                             <TouchableOpacity
-                              style={[styles.stepperBtnSmall, isVeryCompactWidth && styles.stepperBtnVeryCompact, { backgroundColor: isActive ? colors.surfaceContainer : 'transparent', opacity: isCompleted ? 0.4 : 1 }]}
-                              onPress={() => !isCompleted && updateSet(exIdx, setIdx, 'reps', (set.reps ?? 0) + 1)}
-                              disabled={isCompleted}
+                              style={[styles.stepperBtnSmall, isVeryCompactWidth && styles.stepperBtnVeryCompact, { backgroundColor: isActive ? colors.surfaceContainer : 'transparent', opacity: canEditSetValues ? 1 : 0.4 }]}
+                              onPress={() => canEditSetValues && updateSet(exIdx, setIdx, 'reps', (set.reps ?? 0) + 1)}
+                              disabled={!canEditSetValues}
                             >
                               <MaterialIcons name="add" size={isVeryCompactWidth ? 12 : 14} color={colors.onSurface} />
                             </TouchableOpacity>
                             <TouchableOpacity
-                              style={[styles.stepperBtnSmall, isVeryCompactWidth && styles.stepperBtnVeryCompact, { backgroundColor: isActive ? colors.surfaceContainer : 'transparent', opacity: isCompleted ? 0.4 : 1 }]}
-                              onPress={() => !isCompleted && updateSet(exIdx, setIdx, 'reps', Math.max(0, (set.reps ?? 0) - 1))}
-                              disabled={isCompleted}
+                              style={[styles.stepperBtnSmall, isVeryCompactWidth && styles.stepperBtnVeryCompact, { backgroundColor: isActive ? colors.surfaceContainer : 'transparent', opacity: canEditSetValues ? 1 : 0.4 }]}
+                              onPress={() => canEditSetValues && updateSet(exIdx, setIdx, 'reps', Math.max(0, (set.reps ?? 0) - 1))}
+                              disabled={!canEditSetValues}
                             >
                               <MaterialIcons name="remove" size={isVeryCompactWidth ? 12 : 14} color={colors.onSurface} />
                             </TouchableOpacity>
@@ -494,43 +541,49 @@ export default function WorkoutScreen() {
                       </View>
                     </View>
 
-                    <TouchableOpacity
-                      style={[
-                        styles.checkBtn,
-                        isCompactWidth && styles.checkBtnCompact,
-                        isVeryCompactWidth && styles.checkBtnVeryCompact,
-                        { backgroundColor: isCompleted ? colors.primary : colors.surfaceContainer, borderColor: isCompleted ? colors.primary : colors.outlineVariant },
-                      ]}
-                      onPress={() => handleComplete(exIdx, setIdx)}
-                      activeOpacity={0.7}
-                    >
-                      <MaterialIcons name="check" size={isVeryCompactWidth ? 20 : 24} color={isCompleted ? colors.onPrimary : colors.outlineVariant} />
-                    </TouchableOpacity>
+                    {isInProgressWorkout && (
+                      <TouchableOpacity
+                        style={[
+                          styles.checkBtn,
+                          isCompactWidth && styles.checkBtnCompact,
+                          isVeryCompactWidth && styles.checkBtnVeryCompact,
+                          { backgroundColor: isCompleted ? colors.primary : colors.surfaceContainer, borderColor: isCompleted ? colors.primary : colors.outlineVariant },
+                        ]}
+                        onPress={() => handleComplete(exIdx, setIdx)}
+                        activeOpacity={0.7}
+                      >
+                        <MaterialIcons name="check" size={isVeryCompactWidth ? 20 : 24} color={isCompleted ? colors.onPrimary : colors.outlineVariant} />
+                      </TouchableOpacity>
+                    )}
                   </View>
                   </Swipeable>
                 );
               })}
 
-              <TouchableOpacity
-                style={[styles.addSetBtn, { backgroundColor: colors.surfaceContainerLow }]}
-                onPress={() => addSetToExercise(exIdx)}
-              >
-                <Text style={[styles.addSetText, { color: colors.onSurface, fontFamily: fontBold }]}>
-                  + {t('add_set')}
-                </Text>
-              </TouchableOpacity>
+              {isDraftWorkout && (
+                <TouchableOpacity
+                  style={[styles.addSetBtn, { backgroundColor: colors.surfaceContainerLow }]}
+                  onPress={() => addSetToExercise(exIdx)}
+                >
+                  <Text style={[styles.addSetText, { color: colors.onSurface, fontFamily: fontBold }]}> 
+                    + {t('add_set')}
+                  </Text>
+                </TouchableOpacity>
+              )}
             </View>
           );
         })}
 
-        <TouchableOpacity
-          style={[styles.addExerciseBtn, { backgroundColor: colors.surfaceContainerLow }]}
-          onPress={() => router.push('/select-exercise')}
-        >
-          <Text style={[styles.addExerciseText, { color: colors.onSurface, fontFamily: fontBold }]}>
-            + {t('add_exercise')}
-          </Text>
-        </TouchableOpacity>
+        {isDraftWorkout && (
+          <TouchableOpacity
+            style={[styles.addExerciseBtn, { backgroundColor: colors.surfaceContainerLow }]}
+            onPress={() => router.push('/select-exercise')}
+          >
+            <Text style={[styles.addExerciseText, { color: colors.onSurface, fontFamily: fontBold }]}> 
+              + {t('add_exercise')}
+            </Text>
+          </TouchableOpacity>
+        )}
       </ScrollView>
     </ScreenBackground>
   );
@@ -555,6 +608,22 @@ const styles = StyleSheet.create({
   },
   finishBtn: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8 },
   finishBtnText: { fontFamily: 'SpaceGrotesk_700Bold', fontSize: 13 },
+  startBtn: {
+    alignSelf: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    borderRadius: 8,
+    marginTop: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  startBtnText: {
+    fontFamily: 'SpaceGrotesk_700Bold',
+    fontSize: 12,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
   elapsedTimer: {
     fontFamily: 'SpaceGrotesk_400Regular',
     fontSize: 13,
@@ -566,21 +635,6 @@ const styles = StyleSheet.create({
   scrollContent: { paddingHorizontal: 16 },
 
   // Start / history screen
-  startBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    borderRadius: 8,
-    paddingVertical: 18,
-    marginBottom: 20,
-  },
-  startBtnText: {
-    fontFamily: 'SpaceGrotesk_700Bold',
-    fontSize: 15,
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-  },
   searchBox: {
     flexDirection: 'row',
     alignItems: 'center',
