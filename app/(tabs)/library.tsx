@@ -1,21 +1,25 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback, memo } from 'react';
 import {
   View,
   Text,
-  ScrollView,
+  SectionList,
   StyleSheet,
   TextInput,
   TouchableOpacity,
   Modal,
+  Pressable,
+  ScrollView,
+  Alert,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme, ScreenBackground } from '../../src/theme';
 import { useTranslation } from '../../src/i18n';
 import { useAppStore } from '../../src/store/appStore';
+import { SearchBox } from '../../src/components/SearchBox';
 import { bodyPartKeys, bodyPartNameKeys } from '../../src/data/exercises';
 import { getExerciseName } from '../../src/utils/helpers';
-import type { BodyPart } from '../../src/types';
+import type { BodyPart, Exercise } from '../../src/types';
 
 const BODY_PART_ICON: Record<BodyPart, React.ComponentProps<typeof MaterialIcons>['name']> = {
   chest: 'fitness-center',
@@ -28,6 +32,78 @@ const BODY_PART_ICON: Record<BodyPart, React.ComponentProps<typeof MaterialIcons
   other: 'category',
 };
 
+// ── Exercise row ─────────────────────────────────────────────────────────────
+
+const ExerciseRow = memo(function ExerciseRow({
+  exercise,
+  onDelete,
+}: {
+  exercise: Exercise;
+  onDelete?: (exercise: Exercise) => void;
+}) {
+  const { colors } = useTheme();
+  const { t, isRTL, language, fontBold, fontRegular } = useTranslation();
+
+  return (
+    <View
+      style={[
+        styles.exerciseRow,
+        { backgroundColor: colors.surfaceContainerLow, flexDirection: isRTL ? 'row-reverse' : 'row' },
+      ]}
+    >
+      <View style={styles.exerciseContent}>
+        <View
+          style={[
+            styles.exerciseIcon,
+            {
+              backgroundColor: colors.surfaceContainerHighest,
+              marginRight: isRTL ? 0 : 12,
+              marginLeft: isRTL ? 12 : 0,
+            },
+          ]}
+        >
+          <MaterialIcons
+            name={exercise.isCustom ? 'star' : BODY_PART_ICON[exercise.bodyPart]}
+            size={18}
+            color={colors.primary}
+          />
+        </View>
+        <View style={styles.exerciseInfo}
+        >
+          <Text
+            style={[
+              styles.exerciseName,
+              { color: colors.onSurface, textAlign: isRTL ? 'right' : 'left', fontFamily: fontBold },
+            ]}
+          >
+            {getExerciseName(exercise, t, language)}
+          </Text>
+          <Text
+            style={[
+              styles.exerciseMeta,
+              { color: colors.onSurfaceVariant, textAlign: isRTL ? 'right' : 'left', fontFamily: fontRegular },
+            ]}
+          >
+            {exercise.isCustom ? t('custom_exercise') : t(bodyPartNameKeys[exercise.bodyPart] as any)}
+          </Text>
+        </View>
+      </View>
+      {exercise.isCustom && onDelete ? (
+        <TouchableOpacity
+          style={[styles.deleteBtn, { backgroundColor: colors.surfaceContainerHighest }]}
+          onPress={() => onDelete(exercise)}
+          accessibilityRole="button"
+          accessibilityLabel={`${t('delete')} ${getExerciseName(exercise, t, language)}`}
+        >
+          <MaterialIcons name="delete-outline" size={20} color={colors.error} />
+        </TouchableOpacity>
+      ) : null}
+    </View>
+  );
+});
+
+// ── Screen ───────────────────────────────────────────────────────────────────
+
 export default function LibraryScreen() {
   const { colors } = useTheme();
   const { t, isRTL, language, fontBold, fontRegular } = useTranslation();
@@ -39,123 +115,162 @@ export default function LibraryScreen() {
 
   const exercises = useAppStore((s) => s.exercises);
   const addCustomExercise = useAppStore((s) => s.addCustomExercise);
+  const deleteCustomExercise = useAppStore((s) => s.deleteCustomExercise);
 
   const filteredBySearch = exercises.filter((ex) =>
     getExerciseName(ex, t, language).toLowerCase().includes(search.toLowerCase())
   );
 
-  const grouped = bodyPartKeys
+  const sections: Array<{ bodyPart: BodyPart; title: string; data: Exercise[] }> = bodyPartKeys
     .map((bp) => ({
       bodyPart: bp,
-      label: t(bodyPartNameKeys[bp] as any),
-      items: filteredBySearch.filter((ex) => ex.bodyPart === bp),
+      title: t(bodyPartNameKeys[bp] as any),
+      data: filteredBySearch.filter((ex) => ex.bodyPart === bp),
     }))
-    .filter((g) => g.items.length > 0);
+    .filter((g) => g.data.length > 0);
 
-  const handleAddCustom = () => {
+  const handleAddCustom = useCallback(() => {
     if (!customName.trim()) return;
     addCustomExercise(customName.trim(), customBodyPart, language);
     setCustomName('');
     setShowModal(false);
-  };
+  }, [customName, customBodyPart, language, addCustomExercise]);
+
+  const handleDeleteExercise = useCallback(
+    (exercise: Exercise) => {
+      Alert.alert(t('delete'), t('delete_exercise_confirm'), [
+        { text: t('cancel'), style: 'cancel' },
+        {
+          text: t('delete'),
+          style: 'destructive',
+          onPress: () => deleteCustomExercise(exercise.id),
+        },
+      ]);
+    },
+    [deleteCustomExercise, t]
+  );
+
+  const handleCloseModal = useCallback(() => {
+    setShowModal(false);
+    setCustomName('');
+  }, []);
 
   return (
     <ScreenBackground style={styles.container}>
       {/* Header */}
-      <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
-        <Text style={[styles.headerTitle, { color: colors.primary, textAlign: isRTL ? 'right' : 'left', fontFamily: fontBold }]}>
+      <View style={[styles.header, { paddingTop: 12 }]}>
+        <Text
+          style={[
+            styles.headerTitle,
+            { color: colors.primary, textAlign: isRTL ? 'right' : 'left', fontFamily: fontBold },
+          ]}
+        >
           {t('library_title')}
         </Text>
       </View>
 
-      <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={{ paddingBottom: 120, paddingHorizontal: 24 }}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* Search */}
-        <View style={[styles.searchBox, { backgroundColor: colors.surfaceContainerLow, flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
-          <MaterialIcons name="search" size={18} color={colors.outlineVariant} style={{ marginRight: isRTL ? 0 : 10, marginLeft: isRTL ? 10 : 0 }} />
-          <TextInput
-            style={[styles.searchInput, { color: colors.onSurface, textAlign: isRTL ? 'right' : 'left', fontFamily: fontRegular }]}
-            placeholder={t('library_search')}
-            placeholderTextColor={colors.outlineVariant}
-            value={search}
-            onChangeText={setSearch}
-          />
-        </View>
-
-        {/* Add Custom Exercise Button — first in list */}
-        <TouchableOpacity
-          style={[styles.customBtn, { backgroundColor: colors.primaryContainer }]}
-          onPress={() => setShowModal(true)}
-          activeOpacity={0.8}
-        >
-          <MaterialIcons name="add-circle-outline" size={20} color={colors.onPrimaryContainer} />
-          <Text style={[styles.customBtnText, { color: colors.onPrimaryContainer, fontFamily: fontBold }]}>
-            {t('add_custom_exercise')}
-          </Text>
-        </TouchableOpacity>
-
-        {/* Exercise Groups */}
-        {grouped.map((group) => (
-          <View key={group.bodyPart} style={styles.group}>
-            <View style={[styles.groupHeader, { borderBottomColor: colors.outlineVariant + '25', flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
-              <View style={{ flexDirection: isRTL ? 'row-reverse' : 'row', alignItems: 'center', gap: 8 }}>
-                <MaterialIcons name={BODY_PART_ICON[group.bodyPart]} size={16} color={colors.primary} />
-                <Text style={[styles.groupTitle, { color: colors.onBackground, fontFamily: fontBold }]}>
-                  {group.label}
-                </Text>
-              </View>
-              <Text style={[styles.groupCount, { color: colors.primary + '99', fontFamily: fontBold }]}>
-                {group.items.length} {t('exercises_count')}
+      <SectionList
+        sections={sections}
+        keyExtractor={(item) => item.id}
+        renderItem={({ item }) => <ExerciseRow exercise={item} onDelete={handleDeleteExercise} />}
+        renderSectionHeader={({ section }) => (
+          <View
+            style={[
+              styles.groupHeader,
+              {
+                borderBottomColor: colors.outlineVariant + '25',
+                flexDirection: isRTL ? 'row-reverse' : 'row',
+              },
+            ]}
+          >
+            <View style={{ flexDirection: isRTL ? 'row-reverse' : 'row', alignItems: 'center', gap: 8 }}>
+              <MaterialIcons
+                name={BODY_PART_ICON[section.bodyPart]}
+                size={16}
+                color={colors.primary}
+              />
+              <Text style={[styles.groupTitle, { color: colors.onBackground, fontFamily: fontBold }]}>
+                {section.title}
               </Text>
             </View>
-            {group.items.map((exercise) => (
-              <View
-                key={exercise.id}
-                style={[styles.exerciseRow, { backgroundColor: colors.surfaceContainerLow, flexDirection: isRTL ? 'row-reverse' : 'row' }]}
-              >
-                <View style={[styles.exerciseIcon, { backgroundColor: colors.surfaceContainerHighest, marginRight: isRTL ? 0 : 12, marginLeft: isRTL ? 12 : 0 }]}>
-                  <MaterialIcons
-                    name={exercise.isCustom ? 'star' : BODY_PART_ICON[exercise.bodyPart]}
-                    size={18}
-                    color={colors.primary}
-                  />
-                </View>
-                <View style={styles.exerciseInfo}>
-                  <Text style={[styles.exerciseName, { color: colors.onSurface, textAlign: isRTL ? 'right' : 'left', fontFamily: fontBold }]}>
-                    {getExerciseName(exercise, t, language)}
-                  </Text>
-                  <Text style={[styles.exerciseMeta, { color: colors.onSurfaceVariant, textAlign: isRTL ? 'right' : 'left', fontFamily: fontRegular }]}>
-                    {exercise.isCustom ? t('custom_exercise') : t(bodyPartNameKeys[exercise.bodyPart] as any)}
-                  </Text>
-                </View>
-              </View>
-            ))}
+            <Text style={[styles.groupCount, { color: colors.primary + '99', fontFamily: fontBold }]}>
+              {section.data.length} {t('exercises_count')}
+            </Text>
           </View>
-        ))}
-      </ScrollView>
+        )}
+        ListHeaderComponent={
+          <View>
+            <SearchBox
+              value={search}
+              onChangeText={setSearch}
+              placeholder={t('library_search')}
+            />
+            <TouchableOpacity
+              style={[styles.customBtn, { backgroundColor: colors.primaryContainer }]}
+              onPress={() => setShowModal(true)}
+              activeOpacity={0.8}
+              accessibilityRole="button"
+              accessibilityLabel={t('add_custom_exercise')}
+            >
+              <MaterialIcons name="add-circle-outline" size={20} color={colors.onPrimaryContainer} />
+              <Text style={[styles.customBtnText, { color: colors.onPrimaryContainer, fontFamily: fontBold }]}>
+                {t('add_custom_exercise')}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        }
+        stickySectionHeadersEnabled={false}
+        contentContainerStyle={[styles.listContent, { paddingBottom: 120 }]}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        removeClippedSubviews
+        maxToRenderPerBatch={15}
+        windowSize={7}
+      />
 
       {/* Custom Exercise Modal */}
-      <Modal visible={showModal} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { backgroundColor: colors.surfaceContainer }]}>
-            <Text style={[styles.modalTitle, { color: colors.onSurface, textAlign: isRTL ? 'right' : 'left', fontFamily: fontBold }]}>
+      <Modal
+        visible={showModal}
+        animationType="slide"
+        transparent
+        onRequestClose={handleCloseModal}
+      >
+        {/* Backdrop */}
+        <Pressable style={styles.modalOverlay} onPress={handleCloseModal}>
+          <Pressable
+            style={[styles.modalContent, { backgroundColor: colors.surfaceContainer }]}
+            onPress={() => { }}
+          >
+            <Text
+              style={[
+                styles.modalTitle,
+                { color: colors.onSurface, textAlign: isRTL ? 'right' : 'left', fontFamily: fontBold },
+              ]}
+            >
               {t('add_custom_exercise')}
             </Text>
 
             <TextInput
-              style={[styles.modalInput, { backgroundColor: colors.surfaceContainerLow, color: colors.onSurface }]}
+              style={[
+                styles.modalInput,
+                { backgroundColor: colors.surfaceContainerLow, color: colors.onSurface },
+              ]}
               placeholder={t('exercise_name')}
               placeholderTextColor={colors.outlineVariant}
               value={customName}
               onChangeText={setCustomName}
               textAlign={isRTL ? 'right' : 'left'}
               autoFocus
+              returnKeyType="done"
+              onSubmitEditing={handleAddCustom}
             />
 
-            <Text style={[styles.modalLabel, { color: colors.onSurfaceVariant, textAlign: isRTL ? 'right' : 'left', fontFamily: fontBold }]}>
+            <Text
+              style={[
+                styles.modalLabel,
+                { color: colors.onSurfaceVariant, textAlign: isRTL ? 'right' : 'left', fontFamily: fontBold },
+              ]}
+            >
               {t('body_part')}
             </Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipRow}>
@@ -170,6 +285,8 @@ export default function LibraryScreen() {
                     },
                   ]}
                   onPress={() => setCustomBodyPart(bp)}
+                  accessibilityRole="radio"
+                  accessibilityState={{ checked: customBodyPart === bp }}
                 >
                   <Text
                     style={[
@@ -189,19 +306,27 @@ export default function LibraryScreen() {
             <View style={styles.modalActions}>
               <TouchableOpacity
                 style={[styles.modalBtn, { backgroundColor: colors.surfaceContainerHighest }]}
-                onPress={() => setShowModal(false)}
+                onPress={handleCloseModal}
+                accessibilityRole="button"
+                accessibilityLabel={t('cancel')}
               >
-                <Text style={[styles.modalBtnText, { color: colors.onSurface, fontFamily: fontBold }]}>{t('cancel')}</Text>
+                <Text style={[styles.modalBtnText, { color: colors.onSurface, fontFamily: fontBold }]}>
+                  {t('cancel')}
+                </Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.modalBtn, { backgroundColor: colors.primaryContainer }]}
                 onPress={handleAddCustom}
+                accessibilityRole="button"
+                accessibilityLabel={t('save')}
               >
-                <Text style={[styles.modalBtnText, { color: '#ffffff', fontFamily: fontBold }]}>{t('save')}</Text>
+                <Text style={[styles.modalBtnText, { color: colors.onPrimaryContainer, fontFamily: fontBold }]}>
+                  {t('save')}
+                </Text>
               </TouchableOpacity>
             </View>
-          </View>
-        </View>
+          </Pressable>
+        </Pressable>
       </Modal>
     </ScreenBackground>
   );
@@ -216,20 +341,7 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: -0.5,
   },
-  scroll: { flex: 1 },
-  searchBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderRadius: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    marginBottom: 16,
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: 14,
-    fontFamily: 'Manrope_400Regular',
-  },
+  listContent: { paddingHorizontal: 24 },
   customBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -238,8 +350,6 @@ const styles = StyleSheet.create({
     paddingVertical: 18,
     gap: 8,
     marginBottom: 24,
-    borderWidth: 1.5,
-    borderColor: 'rgba(0,0,0,0)',
   },
   customBtnText: {
     fontFamily: 'SpaceGrotesk_700Bold',
@@ -247,7 +357,6 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 1,
   },
-  group: { marginBottom: 32 },
   groupHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -255,6 +364,8 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
     paddingBottom: 8,
     marginBottom: 12,
+    marginTop: 20,
+    backgroundColor: 'transparent',
   },
   groupTitle: {
     fontFamily: 'SpaceGrotesk_700Bold',
@@ -274,6 +385,11 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     marginBottom: 6,
   },
+  exerciseContent: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
   exerciseIcon: {
     width: 40,
     height: 40,
@@ -282,6 +398,14 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   exerciseInfo: { flex: 1 },
+  deleteBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 12,
+  },
   exerciseName: {
     fontFamily: 'SpaceGrotesk_700Bold',
     fontSize: 16,
@@ -293,7 +417,6 @@ const styles = StyleSheet.create({
     letterSpacing: 2,
     marginTop: 2,
   },
-
   // Modal
   modalOverlay: {
     flex: 1,
@@ -310,34 +433,38 @@ const styles = StyleSheet.create({
     fontFamily: 'SpaceGrotesk_700Bold',
     fontSize: 20,
     textTransform: 'uppercase',
+    letterSpacing: -0.5,
     marginBottom: 20,
   },
   modalInput: {
     borderRadius: 8,
-    padding: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
     fontSize: 16,
-    fontFamily: 'Manrope_400Regular',
-    marginBottom: 16,
+    marginBottom: 20,
   },
   modalLabel: {
     fontFamily: 'SpaceGrotesk_700Bold',
-    fontSize: 11,
+    fontSize: 10,
     textTransform: 'uppercase',
     letterSpacing: 2,
-    marginBottom: 8,
+    marginBottom: 12,
   },
-  chipRow: { flexDirection: 'row', marginBottom: 24 },
+  chipRow: { marginBottom: 24 },
   chip: {
     paddingHorizontal: 16,
     paddingVertical: 10,
-    borderRadius: 10,
+    borderRadius: 20,
     marginRight: 8,
   },
   chipText: {
     fontFamily: 'SpaceGrotesk_700Bold',
-    fontSize: 12,
+    fontSize: 13,
   },
-  modalActions: { flexDirection: 'row', gap: 12 },
+  modalActions: {
+    flexDirection: 'row',
+    gap: 12,
+  },
   modalBtn: {
     flex: 1,
     borderRadius: 8,
@@ -347,5 +474,7 @@ const styles = StyleSheet.create({
   modalBtnText: {
     fontFamily: 'SpaceGrotesk_700Bold',
     fontSize: 14,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
 });

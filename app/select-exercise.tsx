@@ -10,10 +10,11 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { useTheme } from '../src/theme';
+import { useTheme, ScreenBackground } from '../src/theme';
 import { useTranslation } from '../src/i18n';
 import { useAppStore } from '../src/store/appStore';
 import { getExerciseName } from '../src/utils/helpers';
+import { SearchBox } from '../src/components/SearchBox';
 import { bodyPartKeys, bodyPartNameKeys } from '../src/data/exercises';
 import type { BodyPart } from '../src/types';
 
@@ -58,7 +59,7 @@ export default function SelectExerciseScreen() {
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.surface }]}>
+    <ScreenBackground style={styles.container}>
       <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
         <TouchableOpacity onPress={() => router.back()}>
           <Text style={[styles.backBtn, { color: colors.primary }]}>← {t('back')}</Text>
@@ -176,7 +177,7 @@ export default function SelectExerciseScreen() {
           </View>
         </View>
       </Modal>
-    </View>
+    </ScreenBackground>
   );
 }
 

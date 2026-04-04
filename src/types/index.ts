@@ -11,10 +11,9 @@ export interface Exercise {
 
 export interface TemplateExercise {
   exerciseId: string;
-  targetSets: number;
-  targetReps: number;
-  lastWeight?: number;
-  lastReps?: number;
+  sets: number;
+  reps: number;
+  weight: number | null;
 }
 
 export interface WorkoutTemplate {

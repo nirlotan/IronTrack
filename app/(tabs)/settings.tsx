@@ -1,7 +1,7 @@
-import { View, Text, ScrollView, StyleSheet, TouchableOpacity, TextInput } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Switch } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme, ScreenBackground } from '../../src/theme';
-import { useTranslation } from '../../src/i18n';
+import { useTranslation, availableLocales } from '../../src/i18n';
 import { useAppStore } from '../../src/store/appStore';
 
 export default function SettingsScreen() {
@@ -15,10 +15,12 @@ export default function SettingsScreen() {
   const setLanguage = useAppStore((s) => s.setLanguage);
   const setThemeMode = useAppStore((s) => s.setThemeMode);
   const setRestTimerSeconds = useAppStore((s) => s.setRestTimerSeconds);
+  const autoStartRestTimer = useAppStore((s) => s.autoStartRestTimer);
+  const setAutoStartRestTimer = useAppStore((s) => s.setAutoStartRestTimer);
 
   return (
     <ScreenBackground style={styles.container}>
-      <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
+      <View style={[styles.header, { paddingTop: 12 }]}>
         <Text style={[styles.headerTitle, { color: colors.primary, textAlign: isRTL ? 'right' : 'left', fontFamily: fontBold }]}>
           {t('settings_title')}
         </Text>
@@ -33,51 +35,40 @@ export default function SettingsScreen() {
           <Text style={[styles.sectionLabel, { color: colors.outlineVariant, textAlign: isRTL ? 'right' : 'left' }]}>
             {t('language')}
           </Text>
-          <View style={styles.optionRow}>
-            <TouchableOpacity
-              style={[
-                styles.optionBtn,
-                {
-                  backgroundColor:
-                    language === 'en' ? colors.primaryContainer : colors.surfaceContainerHighest,
-                },
-              ]}
-              onPress={() => setLanguage('en')}
-            >
-              <Text
-                style={[
-                  styles.optionText,
-                  {
-                    color:
-                      language === 'en' ? colors.onPrimaryContainer : colors.onSurface,
-                  },
-                ]}
-              >
-                {t('english')}
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[
-                styles.optionBtn,
-                {
-                  backgroundColor:
-                    language === 'he' ? colors.primaryContainer : colors.surfaceContainerHighest,
-                },
-              ]}
-              onPress={() => setLanguage('he')}
-            >
-              <Text
-                style={[
-                  styles.optionText,
-                  {
-                    color:
-                      language === 'he' ? colors.onPrimaryContainer : colors.onSurface,
-                  },
-                ]}
-              >
-                {t('hebrew')}
-              </Text>
-            </TouchableOpacity>
+          <View style={styles.languageList}>
+            {availableLocales.map((locale) => {
+              const isSelected = language === locale.code;
+
+              return (
+                <TouchableOpacity
+                  key={locale.code}
+                  style={[
+                    styles.optionBtn,
+                    {
+                      backgroundColor: isSelected
+                        ? colors.primaryContainer
+                        : colors.surfaceContainerHighest,
+                    },
+                  ]}
+                  onPress={() => setLanguage(locale.code)}
+                  accessibilityRole="radio"
+                  accessibilityState={{ checked: isSelected }}
+                  accessibilityLabel={locale.nativeName}
+                >
+                  <Text
+                    style={[
+                      styles.optionText,
+                      {
+                        color: isSelected ? colors.onPrimaryContainer : colors.onSurface,
+                        textAlign: locale.direction === 'rtl' ? 'right' : 'left',
+                      },
+                    ]}
+                  >
+                    {locale.nativeName}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
           </View>
         </View>
 
@@ -134,6 +125,9 @@ export default function SettingsScreen() {
                   },
                 ]}
                 onPress={() => setRestTimerSeconds(seconds)}
+                accessibilityRole="radio"
+                accessibilityState={{ checked: restTimerSeconds === seconds }}
+                accessibilityLabel={`${seconds} ${t('minutes')}`}
               >
                 <Text
                   style={[
@@ -151,6 +145,38 @@ export default function SettingsScreen() {
               </TouchableOpacity>
             ))}
           </View>
+        </View>
+
+        <View
+          style={[
+            styles.toggleRow,
+            { backgroundColor: colors.surfaceContainerLow, flexDirection: isRTL ? 'row-reverse' : 'row' },
+          ]}
+        >
+          <View style={styles.toggleTextWrap}>
+            <Text
+              style={[
+                styles.toggleTitle,
+                { color: colors.onSurface, textAlign: isRTL ? 'right' : 'left', fontFamily: fontBold },
+              ]}
+            >
+              {t('auto_start_rest_timer')}
+            </Text>
+            <Text
+              style={[
+                styles.toggleSubtitle,
+                { color: colors.onSurfaceVariant, textAlign: isRTL ? 'right' : 'left' },
+              ]}
+            >
+              {t('auto_start_rest_timer_hint')}
+            </Text>
+          </View>
+          <Switch
+            value={autoStartRestTimer}
+            onValueChange={setAutoStartRestTimer}
+            trackColor={{ false: colors.surfaceContainerHighest, true: colors.primaryContainer }}
+            thumbColor={autoStartRestTimer ? colors.primary : colors.outlineVariant}
+          />
         </View>
 
         {/* App Info */}
@@ -176,14 +202,17 @@ const styles = StyleSheet.create({
   section: { marginBottom: 32 },
   sectionLabel: {
     fontFamily: 'SpaceGrotesk_700Bold',
-    fontSize: 10,
+    fontSize: 11,
     textTransform: 'uppercase',
     letterSpacing: 2,
     marginBottom: 12,
   },
   optionRow: { flexDirection: 'row', gap: 10 },
+  languageList: { flexDirection: 'row', gap: 10, flexWrap: 'wrap' },
   optionBtn: {
-    flex: 1,
+    flexGrow: 1,
+    flexBasis: 0,
+    minWidth: 0,
     borderRadius: 8,
     paddingVertical: 16,
     alignItems: 'center',
@@ -225,5 +254,25 @@ const styles = StyleSheet.create({
     fontFamily: 'Manrope_400Regular',
     fontSize: 12,
     marginTop: 2,
+  },
+  toggleRow: {
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 24,
+    gap: 12,
+  },
+  toggleTextWrap: {
+    flex: 1,
+  },
+  toggleTitle: {
+    fontSize: 14,
+  },
+  toggleSubtitle: {
+    marginTop: 3,
+    fontFamily: 'Manrope_400Regular',
+    fontSize: 12,
   },
 });

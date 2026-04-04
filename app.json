@@ -2,7 +2,7 @@
   "expo": {
     "name": "IronTrack",
     "slug": "irontrack",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
@@ -14,7 +14,11 @@
     },
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.irontrack.app"
+      "bundleIdentifier": "com.irontrack.app",
+      "buildNumber": "2",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -32,6 +36,12 @@
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "006c4ac9-75f4-4670-b486-9b40e2ed87e1"
+      }
     }
   }
 }

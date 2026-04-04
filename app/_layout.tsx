@@ -29,7 +29,42 @@ function InnerLayout() {
           contentStyle: { backgroundColor: 'transparent' },
           animation: 'slide_from_right',
         }}
-      />
+      >
+        <Stack.Screen name="(tabs)" />
+        <Stack.Screen
+          name="active-workout"
+          options={{
+            presentation: 'pageSheet',
+            animation: 'slide_from_bottom',
+            gestureEnabled: true,
+            headerShown: false,
+          }}
+        />
+        <Stack.Screen
+          name="create-template"
+          options={{
+            presentation: 'formSheet',
+            animation: 'slide_from_bottom',
+            headerShown: false,
+          }}
+        />
+        <Stack.Screen
+          name="edit-template"
+          options={{
+            presentation: 'formSheet',
+            animation: 'slide_from_bottom',
+            headerShown: false,
+          }}
+        />
+        <Stack.Screen
+          name="select-exercise"
+          options={{
+            presentation: 'formSheet',
+            animation: 'slide_from_bottom',
+            headerShown: false,
+          }}
+        />
+      </Stack>
     </>
   );
 }

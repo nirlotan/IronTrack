@@ -9,7 +9,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { useTheme } from '../src/theme';
+import { useTheme, ScreenBackground } from '../src/theme';
 import { useTranslation } from '../src/i18n';
 import { useAppStore } from '../src/store/appStore';
 import { getExerciseName } from '../src/utils/helpers';
@@ -37,17 +37,19 @@ export default function EditTemplateScreen() {
   const handleAddExercise = (exerciseId: string) => {
     setSelectedExercises((prev) => [
       ...prev,
-      { exerciseId, targetSets: 3, targetReps: 10 },
+      { exerciseId, sets: 3, reps: 10, weight: null },
     ]);
     setShowExercisePicker(false);
   };
 
-  const handleUpdateExercise = (index: number, field: 'targetSets' | 'targetReps', value: string) => {
+  const handleUpdateExercise = (index: number, field: 'sets' | 'reps' | 'weight', value: string) => {
     const num = parseInt(value, 10);
-    if (isNaN(num)) return;
     setSelectedExercises((prev) => {
       const updated = [...prev];
-      updated[index] = { ...updated[index], [field]: num };
+      updated[index] = {
+        ...updated[index],
+        [field]: isNaN(num) ? (field === 'weight' ? null : updated[index][field]) : num,
+      };
       return updated;
     });
   };
@@ -74,7 +76,7 @@ export default function EditTemplateScreen() {
 
   if (showExercisePicker) {
     return (
-      <View style={[styles.container, { backgroundColor: colors.surface }]}>
+      <ScreenBackground style={styles.container}>
         <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
           <TouchableOpacity onPress={() => setShowExercisePicker(false)}>
             <Text style={[styles.backBtn, { color: colors.primary }]}>← {t('back')}</Text>
@@ -93,12 +95,12 @@ export default function EditTemplateScreen() {
             </TouchableOpacity>
           ))}
         </ScrollView>
-      </View>
+      </ScreenBackground>
     );
   }
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.surface }]}>
+    <ScreenBackground style={styles.container}>
       <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
         <View style={styles.headerRow}>
           <TouchableOpacity onPress={() => router.back()}>
@@ -149,8 +151,8 @@ export default function EditTemplateScreen() {
                   </Text>
                   <TextInput
                     style={[styles.templateExInput, { backgroundColor: colors.surfaceContainer, color: colors.onSurface }]}
-                    value={te.targetSets.toString()}
-                    onChangeText={(v) => handleUpdateExercise(idx, 'targetSets', v)}
+                    value={te.sets.toString()}
+                    onChangeText={(v) => handleUpdateExercise(idx, 'sets', v)}
                     keyboardType="numeric"
                     textAlign="center"
                   />
@@ -161,18 +163,28 @@ export default function EditTemplateScreen() {
                   </Text>
                   <TextInput
                     style={[styles.templateExInput, { backgroundColor: colors.surfaceContainer, color: colors.onSurface }]}
-                    value={te.targetReps.toString()}
-                    onChangeText={(v) => handleUpdateExercise(idx, 'targetReps', v)}
+                    value={te.reps.toString()}
+                    onChangeText={(v) => handleUpdateExercise(idx, 'reps', v)}
+                    keyboardType="numeric"
+                    textAlign="center"
+                  />
+                </View>
+                <View style={styles.templateExField}>
+                  <Text style={[styles.templateExLabel, { color: colors.outlineVariant, textAlign: isRTL ? 'right' : 'left' }]}>
+                    {t('weight_kg')}
+                  </Text>
+                  <TextInput
+                    style={[styles.templateExInput, { backgroundColor: colors.surfaceContainer, color: colors.onSurface }]}
+                    value={te.weight?.toString() ?? ''}
+                    onChangeText={(v) => handleUpdateExercise(idx, 'weight', v)}
                     keyboardType="numeric"
                     textAlign="center"
                   />
                 </View>
               </View>
-              {(te.lastWeight != null || te.lastReps != null) && (
-                <Text style={[styles.lastUsedText, { color: colors.outlineVariant }]}>
-                  {t('last_time')}: {te.lastWeight ?? '--'}kg × {te.lastReps ?? '--'}
-                </Text>
-              )}
+              <Text style={[styles.lastUsedText, { color: colors.outlineVariant }]}>
+                {t('template_default_values')}: {te.weight ?? '--'}kg × {te.reps}
+              </Text>
             </View>
           );
         })}
@@ -186,7 +198,7 @@ export default function EditTemplateScreen() {
           </Text>
         </TouchableOpacity>
       </ScrollView>
-    </View>
+    </ScreenBackground>
   );
 }
 

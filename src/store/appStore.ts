@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { getJSON, setJSON, hydrateCache } from '../storage/storage';
 import { defaultExercises } from '../data/exercises';
 import * as Crypto from 'expo-crypto';
+import type { LocaleCode } from '../i18n/locales';
 
 const uuid = () => Crypto.randomUUID();
 import type {
@@ -17,21 +18,26 @@ import type {
 type ThemeMode = 'dark' | 'light' | 'system';
 
 interface AppState {
-  language: 'en' | 'he';
+  language: LocaleCode;
   themeMode: ThemeMode;
   restTimerSeconds: number;
+  autoStartRestTimer: boolean;
+  weeklyGoal: number;
   exercises: Exercise[];
   templates: WorkoutTemplate[];
   sessions: WorkoutSession[];
   activeWorkout: ActiveWorkout | null;
 
   // Actions
-  setLanguage: (lang: 'en' | 'he') => void;
+  setLanguage: (lang: LocaleCode) => void;
   setThemeMode: (mode: ThemeMode) => void;
   setRestTimerSeconds: (s: number) => void;
+  setAutoStartRestTimer: (enabled: boolean) => void;
+  setWeeklyGoal: (goal: number) => void;
 
   // Exercises
   addCustomExercise: (name: string, bodyPart: BodyPart, language: string) => void;
+  deleteCustomExercise: (exerciseId: string) => void;
 
   // Templates
   addTemplate: (template: WorkoutTemplate) => void;
@@ -65,16 +71,37 @@ const KEYS = {
   language: 'app_language',
   theme: 'app_theme',
   restTimer: 'app_rest_timer',
+  autoStartRestTimer: 'app_auto_start_rest_timer',
+  weeklyGoal: 'app_weekly_goal',
   exercises: 'app_exercises',
   templates: 'app_templates',
   sessions: 'app_sessions',
   activeWorkout: 'app_active_workout',
 };
 
+function normalizeTemplate(template: WorkoutTemplate & { exercises: any[] }): WorkoutTemplate {
+  return {
+    ...template,
+    exercises: template.exercises.map((exercise: any) => ({
+      exerciseId: exercise.exerciseId,
+      sets: exercise.sets ?? exercise.targetSets ?? 3,
+      reps: exercise.reps ?? exercise.targetReps ?? exercise.lastReps ?? 10,
+      weight:
+        exercise.weight != null
+          ? exercise.weight
+          : exercise.lastWeight != null
+            ? exercise.lastWeight
+            : null,
+    })),
+  };
+}
+
 export const useAppStore = create<AppState>((set, get) => ({
   language: 'he',
   themeMode: 'dark',
   restTimerSeconds: 90,
+  autoStartRestTimer: true,
+  weeklyGoal: 4,
   exercises: defaultExercises,
   templates: [],
   sessions: [],
@@ -95,6 +122,17 @@ export const useAppStore = create<AppState>((set, get) => ({
     setJSON(KEYS.restTimer, s);
   },
 
+  setAutoStartRestTimer: (enabled) => {
+    set({ autoStartRestTimer: enabled });
+    setJSON(KEYS.autoStartRestTimer, enabled);
+  },
+
+  setWeeklyGoal: (goal) => {
+    const safeGoal = Math.max(1, Math.min(14, Math.round(goal)));
+    set({ weeklyGoal: safeGoal });
+    setJSON(KEYS.weeklyGoal, safeGoal);
+  },
+
   addCustomExercise: (name, bodyPart, language) => {
     const id = `custom_${uuid()}`;
     const exercise: Exercise = {
@@ -109,14 +147,40 @@ export const useAppStore = create<AppState>((set, get) => ({
     setJSON(KEYS.exercises, exercises.filter((e) => e.isCustom));
   },
 
+  deleteCustomExercise: (exerciseId) => {
+    const exercises = get().exercises.filter((exercise) => exercise.id !== exerciseId);
+    const templates = get().templates
+      .map((template) => ({
+        ...template,
+        exercises: template.exercises.filter((exercise) => exercise.exerciseId !== exerciseId),
+      }))
+      .filter((template) => template.exercises.length > 0);
+    const activeWorkout = get().activeWorkout
+      ? {
+        ...get().activeWorkout!,
+        exercises: get().activeWorkout!.exercises.filter((exercise) => exercise.exerciseId !== exerciseId),
+      }
+      : null;
+
+    set({
+      exercises,
+      templates,
+      activeWorkout: activeWorkout && activeWorkout.exercises.length > 0 ? activeWorkout : null,
+    });
+    setJSON(KEYS.exercises, exercises.filter((exercise) => exercise.isCustom));
+    setJSON(KEYS.templates, templates);
+    setJSON(KEYS.activeWorkout, activeWorkout && activeWorkout.exercises.length > 0 ? activeWorkout : null);
+  },
+
   addTemplate: (template) => {
-    const templates = [...get().templates, template];
+    const templates = [...get().templates, normalizeTemplate(template as WorkoutTemplate & { exercises: any[] })];
     set({ templates });
     setJSON(KEYS.templates, templates);
   },
 
   updateTemplate: (template) => {
-    const templates = get().templates.map((t) => (t.id === template.id ? template : t));
+    const normalized = normalizeTemplate(template as WorkoutTemplate & { exercises: any[] });
+    const templates = get().templates.map((t) => (t.id === normalized.id ? normalized : t));
     set({ templates });
     setJSON(KEYS.templates, templates);
   },
@@ -132,11 +196,11 @@ export const useAppStore = create<AppState>((set, get) => ({
     if (!template) return;
 
     const exercises: WorkoutExercise[] = template.exercises.map((te) => {
-      const sets: SetRecord[] = Array.from({ length: te.targetSets }, () => ({
+      const sets: SetRecord[] = Array.from({ length: te.sets }, () => ({
         id: uuid(),
         exerciseId: te.exerciseId,
-        weight: te.lastWeight ?? null,
-        reps: te.lastReps ?? te.targetReps,
+        weight: te.weight,
+        reps: te.reps,
         isCompleted: false,
       }));
       return { exerciseId: te.exerciseId, sets };
@@ -158,9 +222,10 @@ export const useAppStore = create<AppState>((set, get) => ({
   startEmptyWorkout: () => {
     const workout: ActiveWorkout = {
       id: uuid(),
-      name: '',
-      mode: 'draft',
+      name: 'Workout',
+      mode: 'inProgress',
       createdAt: Date.now(),
+      startedAt: Date.now(),
       exercises: [],
     };
     set({ activeWorkout: workout });
@@ -210,10 +275,9 @@ export const useAppStore = create<AppState>((set, get) => ({
         const lastSet = ex.sets[ex.sets.length - 1];
         return {
           exerciseId: ex.exerciseId,
-          targetSets: ex.sets.length,
-          targetReps: lastSet?.reps ?? 10,
-          lastWeight: lastSet?.weight ?? undefined,
-          lastReps: lastSet?.reps ?? undefined,
+          sets: ex.sets.length,
+          reps: lastSet?.reps ?? 10,
+          weight: lastSet?.weight ?? null,
         };
       }),
       createdAt: existing?.createdAt ?? now,
@@ -261,7 +325,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   renameActiveWorkout: (name) => {
     const aw = get().activeWorkout;
-    if (!aw || aw.mode !== 'draft') return;
+    if (!aw) return;
     const updated = { ...aw, name };
     set({ activeWorkout: updated });
     setJSON(KEYS.activeWorkout, updated);
@@ -269,20 +333,20 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   addExerciseToWorkout: (exerciseId) => {
     const aw = get().activeWorkout;
-    if (!aw || aw.mode !== 'draft') return;
+    if (!aw || (aw.mode !== 'draft' && aw.mode !== 'inProgress')) return;
 
     const templateExercise = aw.templateId
       ? get()
-          .templates
-          .find((t) => t.id === aw.templateId)
-          ?.exercises.find((ex) => ex.exerciseId === exerciseId)
+        .templates
+        .find((t) => t.id === aw.templateId)
+        ?.exercises.find((ex) => ex.exerciseId === exerciseId)
       : null;
 
     const newSet: SetRecord = {
       id: uuid(),
       exerciseId,
-      weight: templateExercise?.lastWeight ?? null,
-      reps: templateExercise?.lastReps ?? templateExercise?.targetReps ?? null,
+      weight: templateExercise?.weight ?? null,
+      reps: templateExercise?.reps ?? null,
       isCompleted: false,
     };
     const updated = {
@@ -295,7 +359,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   addSetToExercise: (exerciseIndex) => {
     const aw = get().activeWorkout;
-    if (!aw || aw.mode !== 'draft') return;
+    if (!aw || (aw.mode !== 'draft' && aw.mode !== 'inProgress')) return;
     const exercises = [...aw.exercises];
     const exercise = { ...exercises[exerciseIndex] };
     const lastSet = exercise.sets[exercise.sets.length - 1];
@@ -317,7 +381,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   removeSet: (exerciseIndex, setIndex) => {
     const aw = get().activeWorkout;
-    if (!aw || aw.mode !== 'draft') return;
+    if (!aw || (aw.mode !== 'draft' && aw.mode !== 'inProgress')) return;
     const exercises = [...aw.exercises];
     const exercise = { ...exercises[exerciseIndex] };
     exercise.sets = exercise.sets.filter((_, i) => i !== setIndex);
@@ -409,27 +473,31 @@ export const useAppStore = create<AppState>((set, get) => ({
     const allKeys = Object.values(KEYS);
     await hydrateCache(allKeys);
 
-    const language = getJSON<'en' | 'he'>(KEYS.language);
+    const language = getJSON<LocaleCode>(KEYS.language);
     const theme = getJSON<ThemeMode>(KEYS.theme);
     const restTimer = getJSON<number>(KEYS.restTimer);
+    const autoStartRestTimer = getJSON<boolean>(KEYS.autoStartRestTimer);
+    const weeklyGoal = getJSON<number>(KEYS.weeklyGoal);
     const customExercises = getJSON<Exercise[]>(KEYS.exercises) ?? [];
-    const templates = getJSON<WorkoutTemplate[]>(KEYS.templates) ?? [];
+    const templates = (getJSON<(WorkoutTemplate & { exercises: any[] })[]>(KEYS.templates) ?? []).map(normalizeTemplate);
     const sessions = getJSON<WorkoutSession[]>(KEYS.sessions) ?? [];
     const storedActiveWorkout = getJSON<ActiveWorkout & { startTime?: number; mode?: 'draft' | 'inProgress'; createdAt?: number; startedAt?: number }>(KEYS.activeWorkout);
 
     const activeWorkout = storedActiveWorkout
       ? {
-          ...storedActiveWorkout,
-          mode: storedActiveWorkout.mode ?? 'inProgress',
-          createdAt: storedActiveWorkout.createdAt ?? storedActiveWorkout.startTime ?? Date.now(),
-          startedAt: storedActiveWorkout.startedAt ?? storedActiveWorkout.startTime,
-        }
+        ...storedActiveWorkout,
+        mode: storedActiveWorkout.mode ?? 'inProgress',
+        createdAt: storedActiveWorkout.createdAt ?? storedActiveWorkout.startTime ?? Date.now(),
+        startedAt: storedActiveWorkout.startedAt ?? storedActiveWorkout.startTime,
+      }
       : null;
 
     set({
       language: language ?? 'he',
       themeMode: theme ?? 'dark',
       restTimerSeconds: restTimer ?? 90,
+      autoStartRestTimer: autoStartRestTimer ?? true,
+      weeklyGoal: weeklyGoal ?? 4,
       exercises: [...defaultExercises, ...customExercises],
       templates,
       sessions,

@@ -18,7 +18,8 @@ import * as Haptics from 'expo-haptics';
 import { useTheme, ScreenBackground } from '../../src/theme';
 import { useTranslation } from '../../src/i18n';
 import { useAppStore } from '../../src/store/appStore';
-import { getExerciseName, formatTimer, formatVolume } from '../../src/utils/helpers';
+import { getExerciseName, formatTimer } from '../../src/utils/helpers';
+import { SessionCard } from '../../src/components/SessionCard';
 
 export default function WorkoutScreen() {
   const { colors } = useTheme();
@@ -34,6 +35,7 @@ export default function WorkoutScreen() {
   const sessions = useAppStore((s) => s.sessions);
   const restTimerSeconds = useAppStore((s) => s.restTimerSeconds);
   const startWorkoutFromSession = useAppStore((s) => s.startWorkoutFromSession);
+  const startEmptyWorkout = useAppStore((s) => s.startEmptyWorkout);
   const saveActiveWorkout = useAppStore((s) => s.saveActiveWorkout);
   const startActiveWorkout = useAppStore((s) => s.startActiveWorkout);
   const renameActiveWorkout = useAppStore((s) => s.renameActiveWorkout);
@@ -44,8 +46,6 @@ export default function WorkoutScreen() {
   const finishWorkout = useAppStore((s) => s.finishWorkout);
   const discardWorkout = useAppStore((s) => s.discardWorkout);
   const getLastSessionForExercise = useAppStore((s) => s.getLastSessionForExercise);
-
-  const [search, setSearch] = useState('');
 
   // Rest timer
   const [restTimeLeft, setRestTimeLeft] = useState(0);
@@ -60,7 +60,6 @@ export default function WorkoutScreen() {
       setElapsed(0);
       return;
     }
-
     const interval = setInterval(() => {
       setElapsed(Math.floor((Date.now() - activeWorkout.startedAt!) / 1000));
     }, 1000);
@@ -68,7 +67,6 @@ export default function WorkoutScreen() {
   }, [activeWorkout?.startedAt, activeWorkout?.mode]);
 
   useEffect(() => {
-    // Clear stale rest timer state when switching to another workout instance.
     if (restIntervalRef.current) {
       clearInterval(restIntervalRef.current);
       restIntervalRef.current = null;
@@ -94,57 +92,61 @@ export default function WorkoutScreen() {
     }, 1000);
   }, [restTimerSeconds]);
 
-  const handleComplete = (exIdx: number, setIdx: number) => {
-    if (activeWorkout?.mode !== 'inProgress') return;
-    toggleSetComplete(exIdx, setIdx);
-    const set = activeWorkout?.exercises[exIdx]?.sets[setIdx];
-    if (set && !set.isCompleted) {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-      startRestTimer();
-    }
-  };
+  const stopRestTimer = useCallback(() => {
+    setIsResting(false);
+    if (restIntervalRef.current) clearInterval(restIntervalRef.current);
+  }, []);
 
-  const handleFinish = () => {
+  const handleComplete = useCallback(
+    (exIdx: number, setIdx: number) => {
+      if (activeWorkout?.mode !== 'inProgress') return;
+      toggleSetComplete(exIdx, setIdx);
+      const set = activeWorkout?.exercises[exIdx]?.sets[setIdx];
+      if (set && !set.isCompleted) {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+        startRestTimer();
+      }
+    },
+    [activeWorkout, toggleSetComplete, startRestTimer]
+  );
+
+  const handleFinish = useCallback(() => {
     if (activeWorkout?.mode !== 'inProgress') return;
     if (Platform.OS === 'web') {
       const confirmed =
         typeof globalThis.confirm === 'function'
           ? globalThis.confirm(t('finish_workout'))
           : true;
-
       if (confirmed) {
         finishWorkout();
-        if (restIntervalRef.current) clearInterval(restIntervalRef.current);
+        stopRestTimer();
       }
       return;
     }
-
     Alert.alert(t('finish_workout'), '', [
       { text: t('cancel'), style: 'cancel' },
       {
         text: t('finish'),
         onPress: () => {
           finishWorkout();
-          if (restIntervalRef.current) clearInterval(restIntervalRef.current);
+          stopRestTimer();
         },
       },
     ]);
-  };
+  }, [activeWorkout, t, finishWorkout, stopRestTimer]);
 
-  const handleDiscard = () => {
+  const handleDiscard = useCallback(() => {
     if (Platform.OS === 'web') {
       const confirmed =
         typeof globalThis.confirm === 'function'
           ? globalThis.confirm(`${t('discard_workout')}\n${t('discard_confirm')}`)
           : true;
-
       if (confirmed) {
         discardWorkout();
-        if (restIntervalRef.current) clearInterval(restIntervalRef.current);
+        stopRestTimer();
       }
       return;
     }
-
     Alert.alert(t('discard_workout'), t('discard_confirm'), [
       { text: t('cancel'), style: 'cancel' },
       {
@@ -152,177 +154,144 @@ export default function WorkoutScreen() {
         style: 'destructive',
         onPress: () => {
           discardWorkout();
-          if (restIntervalRef.current) clearInterval(restIntervalRef.current);
+          stopRestTimer();
         },
       },
     ]);
-  };
+  }, [t, discardWorkout, stopRestTimer]);
 
-  const handleRepeat = (sessionId: string) => {
-    startWorkoutFromSession(sessionId);
-  };
+  const handleRepeat = useCallback(
+    (sessionId: string) => {
+      startWorkoutFromSession(sessionId);
+    },
+    [startWorkoutFromSession]
+  );
 
-  const handleSave = () => {
+  const handleSave = useCallback(() => {
     if (!activeWorkout || activeWorkout.exercises.length === 0) {
       Alert.alert(t('save'), t('add_exercise'));
       return;
     }
-
     saveActiveWorkout();
     router.push('/(tabs)');
-  };
+  }, [activeWorkout, t, saveActiveWorkout, router]);
 
-  const handleStartWorkout = () => {
+  const handleStartWorkout = useCallback(() => {
     if (!activeWorkout || activeWorkout.exercises.length === 0) {
       Alert.alert(t('start_workout'), t('add_exercise'));
       return;
     }
-
     startActiveWorkout();
-  };
+  }, [activeWorkout, t, startActiveWorkout]);
 
-  const getExName = (id: string) => {
-    const ex = exercises.find((e) => e.id === id);
-    return ex ? getExerciseName(ex, t, language) : id;
-  };
+  const handleNewWorkout = useCallback(() => {
+    startEmptyWorkout();
+  }, [startEmptyWorkout]);
 
-  // ── No active workout: combined start + history screen ──────────────────────
+  const getExerciseInfo = useCallback(
+    (exerciseId: string) => exercises.find((e) => e.id === exerciseId),
+    [exercises]
+  );
+
+  // ── No active workout: start or quick-repeat ─────────────────────────────
   if (!activeWorkout) {
-    const filtered = sessions.filter((s) =>
-      s.name.toLowerCase().includes(search.toLowerCase())
-    );
+    const recentSessions = sessions.slice(0, 3);
 
     return (
       <ScreenBackground style={styles.container}>
-        {/* Header */}
-        <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
-          <Text style={[styles.headerTitle, { color: colors.primary, textAlign: isRTL ? 'right' : 'left', fontFamily: fontBold }]}>
+        <View style={[styles.header, { paddingTop: 12 }]}>
+          <Text
+            style={[
+              styles.headerTitle,
+              { color: colors.primary, textAlign: isRTL ? 'right' : 'left', fontFamily: fontBold },
+            ]}
+          >
             {t('tab_workout')}
           </Text>
         </View>
 
         <ScrollView
           style={styles.scroll}
-          contentContainerStyle={{ paddingBottom: 120, paddingHorizontal: 24 }}
+          contentContainerStyle={styles.idleContent}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
         >
-          {/* Search past workouts */}
-          <View style={[styles.searchBox, { backgroundColor: colors.surfaceContainerLow, flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
-            <MaterialIcons name="search" size={18} color={colors.outlineVariant} style={{ marginRight: isRTL ? 0 : 10, marginLeft: isRTL ? 10 : 0 }} />
-            <TextInput
-              style={[styles.searchInput, { color: colors.onSurface, textAlign: isRTL ? 'right' : 'left', fontFamily: fontRegular }]}
-              placeholder={t('history_search')}
-              placeholderTextColor={colors.outlineVariant}
-              value={search}
-              onChangeText={setSearch}
-            />
-          </View>
+          {/* Start New Workout */}
+          <TouchableOpacity
+            style={[styles.newWorkoutBtn, { backgroundColor: colors.primaryContainer }]}
+            onPress={handleNewWorkout}
+            activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityLabel={t('new_workout')}
+          >
+            <MaterialIcons name="add" size={22} color={colors.onPrimaryContainer} />
+            <Text
+              style={[styles.newWorkoutBtnText, { color: colors.onPrimaryContainer, fontFamily: fontBold }]}
+            >
+              {t('new_workout')}
+            </Text>
+          </TouchableOpacity>
 
-          {/* Recent workouts label */}
-          <Text style={[styles.sectionTitle, { color: colors.onSurface, textAlign: isRTL ? 'right' : 'left', fontFamily: fontBold, marginBottom: 16 }]}>
-            {t('recent_workouts')}
-          </Text>
+          {recentSessions.length > 0 && (
+            <>
+              {/* Section Header */}
+              <View style={styles.recentHeader}>
+                <Text
+                  style={[
+                    styles.sectionTitle,
+                    { color: colors.onSurface, textAlign: isRTL ? 'right' : 'left', fontFamily: fontBold },
+                  ]}
+                >
+                  {t('recent_workouts')}
+                </Text>
+                <TouchableOpacity
+                  onPress={() => router.push('/(tabs)/history')}
+                  accessibilityRole="link"
+                  accessibilityLabel={t('history_title')}
+                >
+                  <Text style={[styles.seeAllLink, { color: colors.primary, fontFamily: fontBold }]}>
+                    {t('history_title')} →
+                  </Text>
+                </TouchableOpacity>
+              </View>
 
-          {filtered.length === 0 && (
+              {recentSessions.map((session) => (
+                <SessionCard key={session.id} session={session} onRepeat={handleRepeat} />
+              ))}
+            </>
+          )}
+
+          {recentSessions.length === 0 && (
             <View style={styles.emptyContainer}>
-              <MaterialIcons name="history" size={40} color={colors.outlineVariant} />
-              <Text style={[styles.emptyText, { color: colors.outlineVariant, fontFamily: fontRegular, marginTop: 12 }]}>
+              <MaterialIcons name="fitness-center" size={48} color={colors.outlineVariant} />
+              <Text
+                style={[styles.emptyText, { color: colors.outlineVariant, fontFamily: fontRegular }]}
+              >
                 {t('no_history')}
               </Text>
             </View>
           )}
-
-          {/* Session Cards */}
-          {filtered.map((session) => {
-            const topExercises = session.exercises.slice(0, 3).map((ex) => {
-              const maxWeight = Math.max(...ex.sets.filter((s) => s.isCompleted).map((s) => s.weight ?? 0));
-              return { name: getExName(ex.exerciseId), maxWeight };
-            });
-
-            return (
-              <View
-                key={session.id}
-                style={[styles.card, { backgroundColor: colors.surfaceContainerLow }]}
-              >
-                <Text style={[styles.ghostText, { color: colors.onSurface }]}>
-                  {session.name.substring(0, 8).toUpperCase()}
-                </Text>
-
-                <View style={styles.cardInner}>
-                  {/* Header Row */}
-                  <View style={styles.cardHeaderRow}>
-                    <View style={{ flex: 1 }}>
-                      <Text style={[styles.cardTitle, { color: colors.onSurface, textAlign: isRTL ? 'right' : 'left', fontFamily: fontBold }]}>
-                        {session.name}
-                      </Text>
-                      <View style={styles.metaRow}>
-                        <MaterialIcons name="calendar-today" size={12} color={colors.onSurfaceVariant} />
-                        <Text style={[styles.metaText, { color: colors.onSurfaceVariant, fontFamily: fontRegular }]}>
-                          {session.date}
-                        </Text>
-                        <View style={[styles.metaDot, { backgroundColor: colors.outlineVariant }]} />
-                        <MaterialIcons name="timer" size={12} color={colors.onSurfaceVariant} />
-                        <Text style={[styles.metaText, { color: colors.onSurfaceVariant, fontFamily: fontRegular }]}>
-                          {session.durationMinutes ?? 0} {t('minutes')}
-                        </Text>
-                      </View>
-                    </View>
-                    <View style={styles.volumeContainer}>
-                      <Text style={[styles.volumeValue, { color: colors.primary, fontFamily: fontBold }]}>
-                        {formatVolume(session.totalVolume ?? 0)}
-                      </Text>
-                      <Text style={[styles.volumeLabel, { color: colors.onSurfaceVariant, fontFamily: fontBold }]}>
-                        {t('kg_lifted')}
-                      </Text>
-                    </View>
-                  </View>
-
-                  {/* Exercise Chips */}
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipsRow}>
-                    {topExercises.map((ex, i) => (
-                      <View key={i} style={[styles.chip, { backgroundColor: colors.surfaceContainerHighest }]}>
-                        <Text style={[styles.chipName, { color: colors.onSurface, fontFamily: fontBold }]}>{ex.name}</Text>
-                        {ex.maxWeight > 0 && (
-                          <Text style={[styles.chipWeight, { color: colors.primary, fontFamily: fontBold }]}>{ex.maxWeight}kg</Text>
-                        )}
-                      </View>
-                    ))}
-                  </ScrollView>
-
-                  {/* Repeat Button */}
-                  <TouchableOpacity
-                    style={[styles.repeatBtn, { backgroundColor: colors.primaryContainer }]}
-                    onPress={() => handleRepeat(session.id)}
-                    activeOpacity={0.8}
-                  >
-                    <MaterialIcons name="replay" size={16} color={colors.onPrimaryContainer} />
-                    <Text style={[styles.repeatBtnText, { color: colors.onPrimaryContainer, fontFamily: fontBold }]}>
-                      {t('repeat_workout')}
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            );
-          })}
         </ScrollView>
       </ScreenBackground>
     );
   }
 
-  // ── Active workout screen ────────────────────────────────────────────────────
-  const getExerciseInfo = (exerciseId: string) =>
-    exercises.find((e) => e.id === exerciseId);
-
+  // ── Active workout screen ─────────────────────────────────────────────────
   const isDraftWorkout = activeWorkout.mode === 'draft';
   const isInProgressWorkout = activeWorkout.mode === 'inProgress';
 
   return (
     <ScreenBackground style={styles.container}>
       {/* Header */}
-      <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
+      <View style={[styles.header, { paddingTop: 12 }]}>
         <View style={styles.headerRow}>
-          <TouchableOpacity onPress={handleDiscard}>
+          <TouchableOpacity
+            onPress={handleDiscard}
+            accessibilityRole="button"
+            accessibilityLabel={t('discard_workout')}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
             <MaterialIcons name="close" size={26} color={colors.error} />
           </TouchableOpacity>
 
@@ -334,20 +303,25 @@ export default function WorkoutScreen() {
             placeholderTextColor={colors.outlineVariant}
             textAlign="center"
             editable={isDraftWorkout}
+            returnKeyType="done"
           />
 
           <TouchableOpacity
             style={[styles.finishBtn, { backgroundColor: colors.primaryContainer }]}
             onPress={isDraftWorkout ? handleSave : handleFinish}
+            accessibilityRole="button"
+            accessibilityLabel={isDraftWorkout ? t('save') : t('finish')}
           >
-            <Text style={[styles.finishBtnText, { color: colors.onPrimaryContainer, fontFamily: fontBold }]}>
+            <Text
+              style={[styles.finishBtnText, { color: colors.onPrimaryContainer, fontFamily: fontBold }]}
+            >
               {isDraftWorkout ? t('save') : t('finish')}
             </Text>
           </TouchableOpacity>
         </View>
 
         {isInProgressWorkout && (
-          <Text style={[styles.elapsedTimer, { color: colors.outlineVariant }]}> 
+          <Text style={[styles.elapsedTimer, { color: colors.outlineVariant }]}>
             {formatTimer(elapsed)}
           </Text>
         )}
@@ -357,50 +331,60 @@ export default function WorkoutScreen() {
             style={[styles.startBtn, { backgroundColor: colors.primaryContainer }]}
             onPress={handleStartWorkout}
             activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityLabel={t('start_workout')}
           >
             <MaterialIcons name="play-arrow" size={18} color={colors.onPrimaryContainer} />
-            <Text style={[styles.startBtnText, { color: colors.onPrimaryContainer, fontFamily: fontBold }]}>
+            <Text
+              style={[styles.startBtnText, { color: colors.onPrimaryContainer, fontFamily: fontBold }]}
+            >
               {t('start_workout')}
             </Text>
           </TouchableOpacity>
         )}
       </View>
 
+      {/* Floating rest timer — outside ScrollView so it stays visible while scrolling */}
+      {isInProgressWorkout && isResting && (
+        <View style={[styles.restTimerContainer, { backgroundColor: colors.surfaceContainerLow }]}>
+          <Text style={[styles.restTimerLabel, { color: colors.outlineVariant, fontFamily: fontBold }]}>
+            {t('rest_timer')}
+          </Text>
+          <Text style={[styles.restTimerValue, { color: colors.primary, fontFamily: fontBold }]}>
+            {formatTimer(restTimeLeft)}
+          </Text>
+          <View style={styles.restTimerActions}>
+            <TouchableOpacity
+              style={[styles.restTimerBtn, { backgroundColor: colors.surfaceContainerHighest }]}
+              onPress={() => setRestTimeLeft((p) => p + 30)}
+              accessibilityRole="button"
+              accessibilityLabel="+30s"
+            >
+              <Text style={[styles.restTimerBtnText, { color: colors.onSurface, fontFamily: fontBold }]}>
+                +30s
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.restTimerBtn, { backgroundColor: colors.surfaceContainerHighest }]}
+              onPress={stopRestTimer}
+              accessibilityRole="button"
+              accessibilityLabel={t('skip')}
+            >
+              <Text style={[styles.restTimerBtnText, { color: colors.error, fontFamily: fontBold }]}>
+                {t('skip')}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
+
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={[styles.scrollContent, { paddingBottom: 140 }]}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
       >
-        {/* Rest Timer */}
-        {isInProgressWorkout && isResting && (
-          <View style={[styles.restTimerContainer, { backgroundColor: colors.surfaceContainerLow }]}>
-            <Text style={[styles.restTimerLabel, { color: colors.outlineVariant }]}>
-              {t('rest_timer')}
-            </Text>
-            <Text style={[styles.restTimerValue, { color: colors.primary }]}>
-              {formatTimer(restTimeLeft)}
-            </Text>
-            <View style={styles.restTimerActions}>
-              <TouchableOpacity
-                style={[styles.restTimerBtn, { backgroundColor: colors.surfaceContainerHighest }]}
-                onPress={() => setRestTimeLeft((p) => p + 30)}
-              >
-                <Text style={[styles.restTimerBtnText, { color: colors.onSurface }]}>+30s</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.restTimerBtn, { backgroundColor: colors.surfaceContainerHighest }]}
-                onPress={() => {
-                  setIsResting(false);
-                  if (restIntervalRef.current) clearInterval(restIntervalRef.current);
-                }}
-              >
-                <Text style={[styles.restTimerBtnText, { color: colors.error }]}>{t('skip')}</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        )}
-
         {/* Exercise Blocks */}
         {activeWorkout.exercises.map((workoutEx, exIdx) => {
           const exerciseInfo = getExerciseInfo(workoutEx.exerciseId);
@@ -410,10 +394,20 @@ export default function WorkoutScreen() {
           return (
             <View key={`${workoutEx.exerciseId}-${exIdx}`} style={styles.exerciseBlock}>
               <View style={styles.exerciseHeader}>
-                <Text style={[styles.exerciseLabel, { color: colors.primary, textAlign: isRTL ? 'right' : 'left', fontFamily: fontBold }]}>
+                <Text
+                  style={[
+                    styles.exerciseLabel,
+                    { color: colors.primary, textAlign: isRTL ? 'right' : 'left', fontFamily: fontBold },
+                  ]}
+                >
                   {t('current_exercise')}
                 </Text>
-                <Text style={[styles.exerciseName, { color: colors.onSurface, textAlign: isRTL ? 'right' : 'left', fontFamily: fontBold }]}>
+                <Text
+                  style={[
+                    styles.exerciseName,
+                    { color: colors.onSurface, textAlign: isRTL ? 'right' : 'left', fontFamily: fontBold },
+                  ]}
+                >
                   {getExerciseName(exerciseInfo, t, language)}
                 </Text>
               </View>
@@ -422,14 +416,13 @@ export default function WorkoutScreen() {
                 const lastSet = lastSets?.[setIdx];
                 const isActive = !set.isCompleted;
                 const isCompleted = set.isCompleted;
+                const canEditSetValues = isDraftWorkout || isInProgressWorkout;
 
                 const renderDeleteAction = () => (
                   <View style={[styles.deleteAction, { backgroundColor: colors.error }]}>
                     <MaterialIcons name="delete" size={24} color="#fff" />
                   </View>
                 );
-
-                const canEditSetValues = isDraftWorkout || isInProgressWorkout;
 
                 return (
                   <Swipeable
@@ -445,117 +438,298 @@ export default function WorkoutScreen() {
                     overshootRight={false}
                     overshootLeft={false}
                   >
-                  <View
-                    style={[
-                      styles.setRow,
-                      isCompactWidth && styles.setRowCompact,
-                      {
-                        backgroundColor: isCompleted ? colors.surfaceContainerLow : colors.surfaceContainerHighest,
-                        borderLeftColor: isCompleted ? colors.primaryDim : 'transparent',
-                        borderLeftWidth: isCompleted ? 3 : 0,
-                        opacity: isCompleted ? 0.7 : 1,
-                        flexDirection: isRTL ? 'row-reverse' : 'row',
-                      },
-                    ]}
-                  >
-                    <View style={[styles.setNumberContainer, isCompactWidth && styles.setNumberContainerCompact]}>
-                      <Text style={[styles.setNumber, isVeryCompactWidth && styles.setNumberVeryCompact, { color: isActive ? colors.primary : colors.outlineVariant, fontFamily: fontBold }]}>
-                        {setIdx + 1}
-                      </Text>
-                    </View>
-
-                    <View style={styles.inputsContainer}>
-                      <View style={styles.inputGroup}>
-                        <Text style={[styles.inputLabel, isVeryCompactWidth && styles.inputLabelVeryCompact, { color: isActive ? colors.primary : colors.outlineVariant, textAlign: isRTL ? 'right' : 'left', fontFamily: fontBold }]}>
-                          {t('weight_kg')}
-                        </Text>
-                        <View style={[styles.stepperRow, isVeryCompactWidth && styles.stepperRowVeryCompact]}>
-                          <TextInput
-                            style={[styles.input, styles.stepperInput, isVeryCompactWidth && styles.stepperInputVeryCompact, { backgroundColor: 'transparent', color: colors.onSurface, fontFamily: fontBold }]}
-                            value={set.weight?.toString() ?? ''}
-                            onChangeText={(v) => updateSet(exIdx, setIdx, 'weight', v ? parseFloat(v) : null)}
-                            placeholder={lastSet?.weight?.toString() ?? '--'}
-                            placeholderTextColor={colors.outlineVariant}
-                            keyboardType="numeric"
-                            editable={canEditSetValues}
-                          />
-                          <View style={styles.stepperButtonsColumn}>
-                            <TouchableOpacity
-                              style={[styles.stepperBtnSmall, isVeryCompactWidth && styles.stepperBtnVeryCompact, { backgroundColor: isActive ? colors.surfaceContainer : 'transparent', opacity: canEditSetValues ? 1 : 0.4 }]}
-                              onPress={() => canEditSetValues && updateSet(exIdx, setIdx, 'weight', (set.weight ?? 0) + 2.5)}
-                              disabled={!canEditSetValues}
-                            >
-                              <MaterialIcons name="add" size={isVeryCompactWidth ? 12 : 14} color={colors.onSurface} />
-                            </TouchableOpacity>
-                            <TouchableOpacity
-                              style={[styles.stepperBtnSmall, isVeryCompactWidth && styles.stepperBtnVeryCompact, { backgroundColor: isActive ? colors.surfaceContainer : 'transparent', opacity: canEditSetValues ? 1 : 0.4 }]}
-                              onPress={() => canEditSetValues && updateSet(exIdx, setIdx, 'weight', Math.max(0, (set.weight ?? 0) - 2.5))}
-                              disabled={!canEditSetValues}
-                            >
-                              <MaterialIcons name="remove" size={isVeryCompactWidth ? 12 : 14} color={colors.onSurface} />
-                            </TouchableOpacity>
-                          </View>
-                        </View>
-                        {lastSet && (
-                          <Text style={[styles.lastValue, isVeryCompactWidth && styles.lastValueVeryCompact, { color: colors.outlineVariant, fontFamily: fontRegular }]}>
-                            {t('last_time')}: {lastSet.weight ?? '--'}
-                          </Text>
-                        )}
-                      </View>
-                      <View style={styles.inputGroup}>
-                        <Text style={[styles.inputLabel, isVeryCompactWidth && styles.inputLabelVeryCompact, { color: isActive ? colors.primary : colors.outlineVariant, textAlign: isRTL ? 'right' : 'left', fontFamily: fontBold }]}>
-                          {t('reps')}
-                        </Text>
-                        <View style={[styles.stepperRow, isVeryCompactWidth && styles.stepperRowVeryCompact]}>
-                          <TextInput
-                            style={[styles.input, styles.stepperInput, isVeryCompactWidth && styles.stepperInputVeryCompact, { backgroundColor: 'transparent', color: colors.onSurface, fontFamily: fontBold }]}
-                            value={set.reps?.toString() ?? ''}
-                            onChangeText={(v) => updateSet(exIdx, setIdx, 'reps', v ? parseInt(v, 10) : null)}
-                            placeholder={lastSet?.reps?.toString() ?? '--'}
-                            placeholderTextColor={colors.outlineVariant}
-                            keyboardType="numeric"
-                            editable={canEditSetValues}
-                          />
-                          <View style={styles.stepperButtonsColumn}>
-                            <TouchableOpacity
-                              style={[styles.stepperBtnSmall, isVeryCompactWidth && styles.stepperBtnVeryCompact, { backgroundColor: isActive ? colors.surfaceContainer : 'transparent', opacity: canEditSetValues ? 1 : 0.4 }]}
-                              onPress={() => canEditSetValues && updateSet(exIdx, setIdx, 'reps', (set.reps ?? 0) + 1)}
-                              disabled={!canEditSetValues}
-                            >
-                              <MaterialIcons name="add" size={isVeryCompactWidth ? 12 : 14} color={colors.onSurface} />
-                            </TouchableOpacity>
-                            <TouchableOpacity
-                              style={[styles.stepperBtnSmall, isVeryCompactWidth && styles.stepperBtnVeryCompact, { backgroundColor: isActive ? colors.surfaceContainer : 'transparent', opacity: canEditSetValues ? 1 : 0.4 }]}
-                              onPress={() => canEditSetValues && updateSet(exIdx, setIdx, 'reps', Math.max(0, (set.reps ?? 0) - 1))}
-                              disabled={!canEditSetValues}
-                            >
-                              <MaterialIcons name="remove" size={isVeryCompactWidth ? 12 : 14} color={colors.onSurface} />
-                            </TouchableOpacity>
-                          </View>
-                        </View>
-                        {lastSet && (
-                          <Text style={[styles.lastValue, isVeryCompactWidth && styles.lastValueVeryCompact, { color: colors.outlineVariant, fontFamily: fontRegular }]}>
-                            {t('last_time')}: {lastSet.reps ?? '--'}
-                          </Text>
-                        )}
-                      </View>
-                    </View>
-
-                    {isInProgressWorkout && (
-                      <TouchableOpacity
+                    <View
+                      style={[
+                        styles.setRow,
+                        isCompactWidth && styles.setRowCompact,
+                        {
+                          backgroundColor: isCompleted
+                            ? colors.surfaceContainerLow
+                            : colors.surfaceContainerHighest,
+                          borderLeftColor: isCompleted ? colors.primaryDim : 'transparent',
+                          borderLeftWidth: isCompleted ? 3 : 0,
+                          opacity: isCompleted ? 0.7 : 1,
+                          flexDirection: isRTL ? 'row-reverse' : 'row',
+                        },
+                      ]}
+                    >
+                      <View
                         style={[
-                          styles.checkBtn,
-                          isCompactWidth && styles.checkBtnCompact,
-                          isVeryCompactWidth && styles.checkBtnVeryCompact,
-                          { backgroundColor: isCompleted ? colors.primary : colors.surfaceContainer, borderColor: isCompleted ? colors.primary : colors.outlineVariant },
+                          styles.setNumberContainer,
+                          isCompactWidth && styles.setNumberContainerCompact,
                         ]}
-                        onPress={() => handleComplete(exIdx, setIdx)}
-                        activeOpacity={0.7}
                       >
-                        <MaterialIcons name="check" size={isVeryCompactWidth ? 20 : 24} color={isCompleted ? colors.onPrimary : colors.outlineVariant} />
-                      </TouchableOpacity>
-                    )}
-                  </View>
+                        <Text
+                          style={[
+                            styles.setNumber,
+                            isVeryCompactWidth && styles.setNumberVeryCompact,
+                            {
+                              color: isActive ? colors.primary : colors.outlineVariant,
+                              fontFamily: fontBold,
+                            },
+                          ]}
+                        >
+                          {setIdx + 1}
+                        </Text>
+                      </View>
+
+                      <View style={styles.inputsContainer}>
+                        {/* Weight input */}
+                        <View style={styles.inputGroup}>
+                          <Text
+                            style={[
+                              styles.inputLabel,
+                              isVeryCompactWidth && styles.inputLabelVeryCompact,
+                              {
+                                color: isActive ? colors.primary : colors.outlineVariant,
+                                textAlign: isRTL ? 'right' : 'left',
+                                fontFamily: fontBold,
+                              },
+                            ]}
+                          >
+                            {t('weight_kg')}
+                          </Text>
+                          <View
+                            style={[
+                              styles.stepperRow,
+                              isVeryCompactWidth && styles.stepperRowVeryCompact,
+                            ]}
+                          >
+                            <TextInput
+                              style={[
+                                styles.input,
+                                styles.stepperInput,
+                                isVeryCompactWidth && styles.stepperInputVeryCompact,
+                                {
+                                  backgroundColor: 'transparent',
+                                  color: colors.onSurface,
+                                  fontFamily: fontBold,
+                                },
+                              ]}
+                              value={set.weight?.toString() ?? ''}
+                              onChangeText={(v) =>
+                                updateSet(exIdx, setIdx, 'weight', v ? parseFloat(v) : null)
+                              }
+                              placeholder={lastSet?.weight?.toString() ?? '--'}
+                              placeholderTextColor={colors.outlineVariant}
+                              keyboardType="numeric"
+                              editable={canEditSetValues}
+                              returnKeyType="next"
+                              accessibilityLabel={`${t('weight_kg')} ${t('set_num')} ${setIdx + 1}`}
+                            />
+                            <View style={styles.stepperButtonsColumn}>
+                              <TouchableOpacity
+                                style={[
+                                  styles.stepperBtnSmall,
+                                  isVeryCompactWidth && styles.stepperBtnVeryCompact,
+                                  {
+                                    backgroundColor: isActive
+                                      ? colors.surfaceContainer
+                                      : 'transparent',
+                                    opacity: canEditSetValues ? 1 : 0.4,
+                                  },
+                                ]}
+                                onPress={() =>
+                                  canEditSetValues &&
+                                  updateSet(exIdx, setIdx, 'weight', (set.weight ?? 0) + 2.5)
+                                }
+                                disabled={!canEditSetValues}
+                                accessibilityRole="button"
+                                accessibilityLabel="+2.5kg"
+                              >
+                                <MaterialIcons
+                                  name="add"
+                                  size={isVeryCompactWidth ? 12 : 14}
+                                  color={colors.onSurface}
+                                />
+                              </TouchableOpacity>
+                              <TouchableOpacity
+                                style={[
+                                  styles.stepperBtnSmall,
+                                  isVeryCompactWidth && styles.stepperBtnVeryCompact,
+                                  {
+                                    backgroundColor: isActive
+                                      ? colors.surfaceContainer
+                                      : 'transparent',
+                                    opacity: canEditSetValues ? 1 : 0.4,
+                                  },
+                                ]}
+                                onPress={() =>
+                                  canEditSetValues &&
+                                  updateSet(
+                                    exIdx,
+                                    setIdx,
+                                    'weight',
+                                    Math.max(0, (set.weight ?? 0) - 2.5)
+                                  )
+                                }
+                                disabled={!canEditSetValues}
+                                accessibilityRole="button"
+                                accessibilityLabel="-2.5kg"
+                              >
+                                <MaterialIcons
+                                  name="remove"
+                                  size={isVeryCompactWidth ? 12 : 14}
+                                  color={colors.onSurface}
+                                />
+                              </TouchableOpacity>
+                            </View>
+                          </View>
+                          {lastSet && (
+                            <Text
+                              style={[
+                                styles.lastValue,
+                                isVeryCompactWidth && styles.lastValueVeryCompact,
+                                { color: colors.outlineVariant, fontFamily: fontRegular },
+                              ]}
+                            >
+                              {t('last_time')}: {lastSet.weight ?? '--'}
+                            </Text>
+                          )}
+                        </View>
+
+                        {/* Reps input */}
+                        <View style={styles.inputGroup}>
+                          <Text
+                            style={[
+                              styles.inputLabel,
+                              isVeryCompactWidth && styles.inputLabelVeryCompact,
+                              {
+                                color: isActive ? colors.primary : colors.outlineVariant,
+                                textAlign: isRTL ? 'right' : 'left',
+                                fontFamily: fontBold,
+                              },
+                            ]}
+                          >
+                            {t('reps')}
+                          </Text>
+                          <View
+                            style={[
+                              styles.stepperRow,
+                              isVeryCompactWidth && styles.stepperRowVeryCompact,
+                            ]}
+                          >
+                            <TextInput
+                              style={[
+                                styles.input,
+                                styles.stepperInput,
+                                isVeryCompactWidth && styles.stepperInputVeryCompact,
+                                {
+                                  backgroundColor: 'transparent',
+                                  color: colors.onSurface,
+                                  fontFamily: fontBold,
+                                },
+                              ]}
+                              value={set.reps?.toString() ?? ''}
+                              onChangeText={(v) =>
+                                updateSet(exIdx, setIdx, 'reps', v ? parseInt(v, 10) : null)
+                              }
+                              placeholder={lastSet?.reps?.toString() ?? '--'}
+                              placeholderTextColor={colors.outlineVariant}
+                              keyboardType="numeric"
+                              editable={canEditSetValues}
+                              returnKeyType="done"
+                              accessibilityLabel={`${t('reps')} ${t('set_num')} ${setIdx + 1}`}
+                            />
+                            <View style={styles.stepperButtonsColumn}>
+                              <TouchableOpacity
+                                style={[
+                                  styles.stepperBtnSmall,
+                                  isVeryCompactWidth && styles.stepperBtnVeryCompact,
+                                  {
+                                    backgroundColor: isActive
+                                      ? colors.surfaceContainer
+                                      : 'transparent',
+                                    opacity: canEditSetValues ? 1 : 0.4,
+                                  },
+                                ]}
+                                onPress={() =>
+                                  canEditSetValues &&
+                                  updateSet(exIdx, setIdx, 'reps', (set.reps ?? 0) + 1)
+                                }
+                                disabled={!canEditSetValues}
+                                accessibilityRole="button"
+                                accessibilityLabel="+1 rep"
+                              >
+                                <MaterialIcons
+                                  name="add"
+                                  size={isVeryCompactWidth ? 12 : 14}
+                                  color={colors.onSurface}
+                                />
+                              </TouchableOpacity>
+                              <TouchableOpacity
+                                style={[
+                                  styles.stepperBtnSmall,
+                                  isVeryCompactWidth && styles.stepperBtnVeryCompact,
+                                  {
+                                    backgroundColor: isActive
+                                      ? colors.surfaceContainer
+                                      : 'transparent',
+                                    opacity: canEditSetValues ? 1 : 0.4,
+                                  },
+                                ]}
+                                onPress={() =>
+                                  canEditSetValues &&
+                                  updateSet(
+                                    exIdx,
+                                    setIdx,
+                                    'reps',
+                                    Math.max(0, (set.reps ?? 0) - 1)
+                                  )
+                                }
+                                disabled={!canEditSetValues}
+                                accessibilityRole="button"
+                                accessibilityLabel="-1 rep"
+                              >
+                                <MaterialIcons
+                                  name="remove"
+                                  size={isVeryCompactWidth ? 12 : 14}
+                                  color={colors.onSurface}
+                                />
+                              </TouchableOpacity>
+                            </View>
+                          </View>
+                          {lastSet && (
+                            <Text
+                              style={[
+                                styles.lastValue,
+                                isVeryCompactWidth && styles.lastValueVeryCompact,
+                                { color: colors.outlineVariant, fontFamily: fontRegular },
+                              ]}
+                            >
+                              {t('last_time')}: {lastSet.reps ?? '--'}
+                            </Text>
+                          )}
+                        </View>
+                      </View>
+
+                      {isInProgressWorkout && (
+                        <TouchableOpacity
+                          style={[
+                            styles.checkBtn,
+                            isCompactWidth && styles.checkBtnCompact,
+                            isVeryCompactWidth && styles.checkBtnVeryCompact,
+                            {
+                              backgroundColor: isCompleted
+                                ? colors.primary
+                                : colors.surfaceContainer,
+                              borderColor: isCompleted ? colors.primary : colors.outlineVariant,
+                            },
+                          ]}
+                          onPress={() => handleComplete(exIdx, setIdx)}
+                          activeOpacity={0.7}
+                          accessibilityRole="button"
+                          accessibilityState={{ checked: isCompleted }}
+                          accessibilityLabel={`${t('set_num')} ${setIdx + 1} ${isCompleted ? t('done') : t('start')}`}
+                        >
+                          <MaterialIcons
+                            name="check"
+                            size={isVeryCompactWidth ? 20 : 24}
+                            color={isCompleted ? colors.onPrimary : colors.outlineVariant}
+                          />
+                        </TouchableOpacity>
+                      )}
+                    </View>
                   </Swipeable>
                 );
               })}
@@ -564,8 +738,10 @@ export default function WorkoutScreen() {
                 <TouchableOpacity
                   style={[styles.addSetBtn, { backgroundColor: colors.surfaceContainerLow }]}
                   onPress={() => addSetToExercise(exIdx)}
+                  accessibilityRole="button"
+                  accessibilityLabel={t('add_set')}
                 >
-                  <Text style={[styles.addSetText, { color: colors.onSurface, fontFamily: fontBold }]}> 
+                  <Text style={[styles.addSetText, { color: colors.onSurface, fontFamily: fontBold }]}>
                     + {t('add_set')}
                   </Text>
                 </TouchableOpacity>
@@ -578,8 +754,10 @@ export default function WorkoutScreen() {
           <TouchableOpacity
             style={[styles.addExerciseBtn, { backgroundColor: colors.surfaceContainerLow }]}
             onPress={() => router.push('/select-exercise')}
+            accessibilityRole="button"
+            accessibilityLabel={t('add_exercise')}
           >
-            <Text style={[styles.addExerciseText, { color: colors.onSurface, fontFamily: fontBold }]}> 
+            <Text style={[styles.addExerciseText, { color: colors.onSurface, fontFamily: fontBold }]}>
               + {t('add_exercise')}
             </Text>
           </TouchableOpacity>
@@ -631,82 +809,101 @@ const styles = StyleSheet.create({
     marginTop: 4,
     letterSpacing: 2,
   },
+
+  // Floating rest timer
+  restTimerContainer: {
+    marginHorizontal: 16,
+    marginBottom: 8,
+    borderRadius: 12,
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  restTimerLabel: {
+    fontFamily: 'SpaceGrotesk_700Bold',
+    fontSize: 10,
+    textTransform: 'uppercase',
+    letterSpacing: 2,
+  },
+  restTimerValue: {
+    fontFamily: 'SpaceGrotesk_700Bold',
+    fontSize: 40,
+    letterSpacing: -2,
+  },
+  restTimerActions: { flexDirection: 'row', gap: 8 },
+  restTimerBtn: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20 },
+  restTimerBtnText: { fontFamily: 'SpaceGrotesk_700Bold', fontSize: 12 },
+
   scroll: { flex: 1 },
   scrollContent: { paddingHorizontal: 16 },
 
-  // Start / history screen
-  searchBox: {
+  // Idle screen
+  idleContent: {
+    paddingHorizontal: 24,
+    paddingBottom: 120,
+    paddingTop: 8,
+  },
+  newWorkoutBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderRadius: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    marginBottom: 20,
+    justifyContent: 'center',
+    gap: 8,
+    borderRadius: 12,
+    paddingVertical: 20,
+    marginBottom: 32,
   },
-  searchInput: { flex: 1, fontSize: 14 },
+  newWorkoutBtnText: {
+    fontFamily: 'SpaceGrotesk_700Bold',
+    fontSize: 15,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+  },
+  recentHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'baseline',
+    marginBottom: 16,
+  },
   sectionTitle: {
     fontFamily: 'SpaceGrotesk_700Bold',
     fontSize: 20,
     textTransform: 'uppercase',
     letterSpacing: -0.5,
   },
-  emptyContainer: { alignItems: 'center', paddingTop: 48 },
-  emptyText: { fontSize: 15 },
-
-  // Session card
-  card: {
-    borderRadius: 10,
-    padding: 24,
-    marginBottom: 16,
-    overflow: 'hidden',
-    position: 'relative',
-  },
-  ghostText: {
-    position: 'absolute',
-    top: -8,
-    left: -8,
-    fontSize: 60,
+  seeAllLink: {
     fontFamily: 'SpaceGrotesk_700Bold',
-    opacity: 0.03,
-    letterSpacing: -2,
+    fontSize: 13,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
-  cardInner: { position: 'relative', zIndex: 1 },
-  cardHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 },
-  cardTitle: { fontFamily: 'SpaceGrotesk_700Bold', fontSize: 18, textTransform: 'uppercase', marginBottom: 4 },
-  metaRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  metaText: { fontSize: 12 },
-  metaDot: { width: 3, height: 3, borderRadius: 2 },
-  volumeContainer: { alignItems: 'flex-end' },
-  volumeValue: { fontFamily: 'SpaceGrotesk_700Bold', fontSize: 22 },
-  volumeLabel: { fontFamily: 'SpaceGrotesk_700Bold', fontSize: 9, textTransform: 'uppercase', letterSpacing: 2 },
-  chipsRow: { flexDirection: 'row', marginBottom: 16 },
-  chip: { flexDirection: 'row', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 10, marginRight: 8, gap: 6 },
-  chipName: { fontFamily: 'SpaceGrotesk_700Bold', fontSize: 11 },
-  chipWeight: { fontFamily: 'SpaceGrotesk_700Bold', fontSize: 11 },
-  repeatBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    borderRadius: 8,
-    paddingVertical: 14,
-  },
-  repeatBtnText: { fontFamily: 'SpaceGrotesk_700Bold', fontSize: 13, textTransform: 'uppercase', letterSpacing: 0.5 },
-
-  // Rest timer
-  restTimerContainer: { borderRadius: 12, padding: 24, marginBottom: 20, alignItems: 'center' },
-  restTimerLabel: { fontFamily: 'SpaceGrotesk_700Bold', fontSize: 10, textTransform: 'uppercase', letterSpacing: 2 },
-  restTimerValue: { fontFamily: 'SpaceGrotesk_700Bold', fontSize: 52, letterSpacing: -2, marginVertical: 4 },
-  restTimerActions: { flexDirection: 'row', gap: 12, marginTop: 8 },
-  restTimerBtn: { paddingHorizontal: 20, paddingVertical: 10, borderRadius: 20 },
-  restTimerBtnText: { fontFamily: 'SpaceGrotesk_700Bold', fontSize: 12 },
+  emptyContainer: { alignItems: 'center', paddingTop: 48, gap: 16 },
+  emptyText: { fontSize: 15 },
 
   // Exercise blocks
   exerciseBlock: { marginBottom: 28 },
   exerciseHeader: { marginBottom: 12 },
-  exerciseLabel: { fontFamily: 'SpaceGrotesk_700Bold', fontSize: 10, textTransform: 'uppercase', letterSpacing: 2 },
-  exerciseName: { fontFamily: 'SpaceGrotesk_700Bold', fontSize: 26, textTransform: 'uppercase', letterSpacing: -0.5 },
-  setRow: { flexDirection: 'row', alignItems: 'center', borderRadius: 12, padding: 14, marginBottom: 8, gap: 12 },
+  exerciseLabel: {
+    fontFamily: 'SpaceGrotesk_700Bold',
+    fontSize: 10,
+    textTransform: 'uppercase',
+    letterSpacing: 2,
+  },
+  exerciseName: {
+    fontFamily: 'SpaceGrotesk_700Bold',
+    fontSize: 26,
+    textTransform: 'uppercase',
+    letterSpacing: -0.5,
+  },
+  setRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 8,
+    gap: 12,
+  },
   setRowCompact: { paddingHorizontal: 10, paddingVertical: 12, gap: 8 },
   setNumberContainer: { width: 36, alignItems: 'center' },
   setNumberContainerCompact: { width: 28 },
@@ -714,25 +911,65 @@ const styles = StyleSheet.create({
   setNumberVeryCompact: { fontSize: 18 },
   inputsContainer: { flex: 1, flexDirection: 'row', gap: 8, minWidth: 0 },
   inputGroup: { flex: 1, minWidth: 0 },
-  inputLabel: { fontFamily: 'SpaceGrotesk_700Bold', fontSize: 9, textTransform: 'uppercase', letterSpacing: 2, marginBottom: 4 },
-  inputLabelVeryCompact: { fontSize: 8, letterSpacing: 1.4 },
-  input: { fontFamily: 'SpaceGrotesk_700Bold', fontSize: 22, borderRadius: 8, padding: 8, textAlign: 'center' },
+  inputLabel: {
+    fontFamily: 'SpaceGrotesk_700Bold',
+    fontSize: 10,
+    textTransform: 'uppercase',
+    letterSpacing: 2,
+    marginBottom: 4,
+  },
+  inputLabelVeryCompact: { fontSize: 9, letterSpacing: 1.4 },
+  input: {
+    fontFamily: 'SpaceGrotesk_700Bold',
+    fontSize: 22,
+    borderRadius: 8,
+    padding: 8,
+    textAlign: 'center',
+  },
   stepperRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   stepperRowVeryCompact: { gap: 4 },
   stepperButtonsColumn: { gap: 4 },
-  stepperBtnSmall: { width: 22, height: 20, borderRadius: 5, alignItems: 'center', justifyContent: 'center' },
+  stepperBtnSmall: {
+    width: 22,
+    height: 20,
+    borderRadius: 5,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   stepperBtnVeryCompact: { width: 20, height: 18, borderRadius: 4 },
   stepperInput: { flex: 1, minWidth: 0, fontSize: 18, paddingVertical: 6, paddingHorizontal: 4 },
   stepperInputVeryCompact: { fontSize: 16, paddingVertical: 4 },
-  deleteAction: { width: 72, marginBottom: 8, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-  lastValue: { fontFamily: 'Manrope_400Regular', fontSize: 9, marginTop: 3 },
-  lastValueVeryCompact: { fontSize: 8 },
-  checkBtn: { width: 52, height: 52, borderRadius: 12, alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
+  deleteAction: {
+    width: 72,
+    marginBottom: 8,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  lastValue: { fontFamily: 'Manrope_400Regular', fontSize: 10, marginTop: 3 },
+  lastValueVeryCompact: { fontSize: 9 },
+  checkBtn: {
+    width: 52,
+    height: 52,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+  },
   checkBtnCompact: { width: 44, height: 44 },
   checkBtnVeryCompact: { width: 40, height: 40 },
-  checkIcon: { fontSize: 22, fontWeight: '800' },
   addSetBtn: { borderRadius: 12, paddingVertical: 14, alignItems: 'center', marginTop: 4 },
-  addSetText: { fontFamily: 'SpaceGrotesk_700Bold', fontSize: 12, textTransform: 'uppercase', letterSpacing: 1 },
+  addSetText: {
+    fontFamily: 'SpaceGrotesk_700Bold',
+    fontSize: 12,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+  },
   addExerciseBtn: { borderRadius: 12, paddingVertical: 18, alignItems: 'center', marginTop: 8 },
-  addExerciseText: { fontFamily: 'SpaceGrotesk_700Bold', fontSize: 13, textTransform: 'uppercase', letterSpacing: 1 },
+  addExerciseText: {
+    fontFamily: 'SpaceGrotesk_700Bold',
+    fontSize: 13,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+  },
 });
