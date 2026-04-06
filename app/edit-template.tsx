@@ -82,7 +82,12 @@ export default function EditTemplateScreen() {
             <Text style={[styles.backBtn, { color: colors.primary }]}>← {t('back')}</Text>
           </TouchableOpacity>
         </View>
-        <ScrollView contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 40 }}>
+        <ScrollView
+          style={{ flex: 1 }}
+          contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 40 }}
+          scrollEventThrottle={16}
+          nestedScrollEnabled={true}
+        >
           {exercises.map((ex) => (
             <TouchableOpacity
               key={ex.id}
@@ -119,6 +124,8 @@ export default function EditTemplateScreen() {
         contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 120 }}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
+        scrollEventThrottle={16}
+        nestedScrollEnabled={true}
       >
         <TextInput
           style={[

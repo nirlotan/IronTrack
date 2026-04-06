@@ -7,6 +7,8 @@ import {
   TextInput,
   TouchableOpacity,
   Modal,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -70,9 +72,12 @@ export default function SelectExerciseScreen() {
       </View>
 
       <ScrollView
+        style={{ flex: 1 }}
         contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 40 }}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
+        scrollEventThrottle={16}
+        nestedScrollEnabled={true}
       >
         {/* Search */}
         <View style={[styles.searchBox, { backgroundColor: colors.surfaceContainerLow }]}>
@@ -119,7 +124,11 @@ export default function SelectExerciseScreen() {
 
       {/* Custom Exercise Modal */}
       <Modal visible={showCustomModal} animationType="slide" transparent>
-        <View style={styles.modalOverlay}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.modalOverlay}
+          keyboardVerticalOffset={50}
+        >
           <View style={[styles.modalContent, { backgroundColor: colors.surfaceContainer }]}>
             <Text style={[styles.modalTitle, { color: colors.onSurface, textAlign: isRTL ? 'right' : 'left' }]}>
               {t('add_custom_exercise')}
@@ -175,7 +184,7 @@ export default function SelectExerciseScreen() {
               </TouchableOpacity>
             </View>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
     </ScreenBackground>
   );

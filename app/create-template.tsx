@@ -78,7 +78,7 @@ export default function CreateTemplateScreen() {
             {t('add_exercise')}
           </Text>
         </View>
-        <ScrollView contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 40 }}>
+        <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 40 }}>
           {exercises.map((ex) => (
             <TouchableOpacity
               key={ex.id}
@@ -117,6 +117,8 @@ export default function CreateTemplateScreen() {
         contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 120 }}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
+        scrollEventThrottle={16}
+        nestedScrollEnabled={true}
       >
         {/* Name Input */}
         <TextInput

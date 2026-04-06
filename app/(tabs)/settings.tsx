@@ -29,6 +29,8 @@ export default function SettingsScreen() {
       <ScrollView
         contentContainerStyle={{ paddingBottom: 120, paddingHorizontal: 24 }}
         showsVerticalScrollIndicator={false}
+        scrollEventThrottle={16}
+        nestedScrollEnabled={true}
       >
         {/* Language */}
         <View style={styles.section}>

@@ -330,12 +330,14 @@ export default function HomeScreen() {
       <ScrollView
         contentContainerStyle={{ paddingBottom: 120, paddingHorizontal: 16, paddingTop: 12 }}
         showsVerticalScrollIndicator={false}
+        scrollEventThrottle={16}
+        nestedScrollEnabled={true}
       >
         <View style={[styles.titleRow, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
           <Text
             style={[
               styles.title,
-              { color: colors.primary, fontFamily: fontBold, textAlign: isRTL ? 'right' : 'left' },
+              { color: colors.onSurface, fontFamily: fontBold, textAlign: isRTL ? 'right' : 'left' },
             ]}
           >
             {t('tab_home')}
@@ -627,10 +629,7 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   title: {
-    fontFamily: 'SpaceGrotesk_700Bold',
-    fontSize: 26,
-    textTransform: 'uppercase',
-    letterSpacing: -0.5,
+    fontSize: 34,
   },
   emptyWorkoutBtn: {
     borderRadius: 14,

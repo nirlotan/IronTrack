@@ -244,6 +244,8 @@ export default function ActiveWorkoutScreen() {
                 style={styles.scroll}
                 contentContainerStyle={{ paddingBottom: 128, paddingHorizontal: 16 }}
                 showsVerticalScrollIndicator={false}
+                scrollEventThrottle={16}
+                nestedScrollEnabled={true}
             >
                 {activeWorkout.exercises.map((exercise, exIdx) => {
                     const exerciseInfo = exercises.find((item) => item.id === exercise.exerciseId);

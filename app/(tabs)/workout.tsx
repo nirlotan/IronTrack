@@ -216,6 +216,8 @@ export default function WorkoutScreen() {
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="on-drag"
+          scrollEventThrottle={16}
+          nestedScrollEnabled={true}
         >
           {/* Start New Workout */}
           <TouchableOpacity
@@ -384,6 +386,8 @@ export default function WorkoutScreen() {
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
+        scrollEventThrottle={16}
+        nestedScrollEnabled={true}
       >
         {/* Exercise Blocks */}
         {activeWorkout.exercises.map((workoutEx, exIdx) => {
