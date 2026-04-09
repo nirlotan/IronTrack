@@ -1,0 +1,1 @@
+cd /Users/nlotan/code/local/IronTrack && eas build --platform ios --auto-submit

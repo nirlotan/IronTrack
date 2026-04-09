@@ -1,15 +1,17 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import {
   View,
   Text,
-  ScrollView,
   StyleSheet,
   TextInput,
   TouchableOpacity,
+  Keyboard,
   Modal,
-  KeyboardAvoidingView,
   Platform,
+  Pressable,
+  useWindowDimensions,
 } from 'react-native';
+import { ScrollView } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useTheme, ScreenBackground } from '../src/theme';
@@ -24,6 +26,7 @@ export default function SelectExerciseScreen() {
   const { colors } = useTheme();
   const { t, isRTL, language } = useTranslation();
   const insets = useSafeAreaInsets();
+  const { height: windowHeight } = useWindowDimensions();
   const router = useRouter();
 
   const exercises = useAppStore((s) => s.exercises);
@@ -34,6 +37,44 @@ export default function SelectExerciseScreen() {
   const [showCustomModal, setShowCustomModal] = useState(false);
   const [customName, setCustomName] = useState('');
   const [customBodyPart, setCustomBodyPart] = useState<BodyPart>('chest');
+  const [keyboardInset, setKeyboardInset] = useState(0);
+  const customNameRef = useRef<TextInput>(null);
+
+  useEffect(() => {
+    if (showCustomModal) {
+      // Small delay to ensure the view is rendered before focusing
+      const timer = setTimeout(() => customNameRef.current?.focus(), 100);
+      return () => clearTimeout(timer);
+    }
+  }, [showCustomModal]);
+
+  useEffect(() => {
+    if (!showCustomModal) {
+      setKeyboardInset(0);
+      return;
+    }
+
+    const onKeyboardChange = (e: any) => {
+      const keyboardHeight = e?.endCoordinates?.height ?? 0;
+      setKeyboardInset(Math.max(0, keyboardHeight - insets.bottom));
+    };
+
+    const onKeyboardHide = () => setKeyboardInset(0);
+
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const changeEvent = Platform.OS === 'ios' ? 'keyboardWillChangeFrame' : 'keyboardDidShow';
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+
+    const showSub = Keyboard.addListener(showEvent, onKeyboardChange);
+    const changeSub = Keyboard.addListener(changeEvent, onKeyboardChange);
+    const hideSub = Keyboard.addListener(hideEvent, onKeyboardHide);
+
+    return () => {
+      showSub.remove();
+      changeSub.remove();
+      hideSub.remove();
+    };
+  }, [showCustomModal, insets.bottom]);
 
   const filteredBySearch = exercises.filter((ex) =>
     getExerciseName(ex, t, language).toLowerCase().includes(search.toLowerCase())
@@ -122,69 +163,105 @@ export default function SelectExerciseScreen() {
         ))}
       </ScrollView>
 
-      {/* Custom Exercise Modal */}
-      <Modal visible={showCustomModal} animationType="slide" transparent>
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          style={styles.modalOverlay}
-          keyboardVerticalOffset={50}
-        >
-          <View style={[styles.modalContent, { backgroundColor: colors.surfaceContainer }]}>
-            <Text style={[styles.modalTitle, { color: colors.onSurface, textAlign: isRTL ? 'right' : 'left' }]}>
-              {t('add_custom_exercise')}
-            </Text>
-            <TextInput
-              style={[styles.modalInput, { backgroundColor: colors.surfaceContainerLow, color: colors.onSurface }]}
-              placeholder={t('exercise_name')}
-              placeholderTextColor={colors.outlineVariant}
-              value={customName}
-              onChangeText={setCustomName}
-              textAlign={isRTL ? 'right' : 'left'}
-              autoFocus
-            />
-            <Text style={[styles.modalLabel, { color: colors.onSurfaceVariant, textAlign: isRTL ? 'right' : 'left' }]}>
-              {t('body_part')}
-            </Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipRow}>
-              {bodyPartKeys.map((bp) => (
-                <TouchableOpacity
-                  key={bp}
-                  style={[
-                    styles.chip,
-                    {
-                      backgroundColor:
-                        customBodyPart === bp ? colors.primaryContainer : colors.surfaceContainerHighest,
-                    },
-                  ]}
-                  onPress={() => setCustomBodyPart(bp)}
-                >
-                  <Text
+      {/* Custom Exercise Overlay */}
+      <Modal
+        visible={showCustomModal}
+        transparent
+        animationType="fade"
+        presentationStyle="overFullScreen"
+        statusBarTranslucent
+        onRequestClose={() => {
+          Keyboard.dismiss();
+          setShowCustomModal(false);
+        }}
+      >
+        <View style={styles.modalOverlay}>
+          <Pressable
+            style={StyleSheet.absoluteFill}
+            onPress={() => {
+              Keyboard.dismiss();
+              setShowCustomModal(false);
+            }}
+          />
+          <ScrollView
+            style={styles.modalScroll}
+            contentContainerStyle={{
+              paddingTop: insets.top + 20,
+              paddingBottom: Math.max(insets.bottom, 16) + keyboardInset,
+            }}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="interactive"
+            automaticallyAdjustKeyboardInsets
+            showsVerticalScrollIndicator={false}
+          >
+            <View
+              style={[
+                styles.modalContent,
+                {
+                  backgroundColor: colors.surfaceContainer,
+                  maxHeight: windowHeight - insets.top - insets.bottom - 24,
+                  marginBottom: keyboardInset,
+                },
+              ]}
+            >
+              <Text style={[styles.modalTitle, { color: colors.onSurface, textAlign: isRTL ? 'right' : 'left' }]}>
+                {t('add_custom_exercise')}
+              </Text>
+              <TextInput
+                style={[styles.modalInput, { backgroundColor: colors.surfaceContainerLow, color: colors.onSurface }]}
+                placeholder={t('exercise_name')}
+                placeholderTextColor={colors.outlineVariant}
+                value={customName}
+                onChangeText={setCustomName}
+                textAlign={isRTL ? 'right' : 'left'}
+                ref={customNameRef}
+                returnKeyType="done"
+                onSubmitEditing={handleAddCustom}
+              />
+              <Text style={[styles.modalLabel, { color: colors.onSurfaceVariant, textAlign: isRTL ? 'right' : 'left' }]}>
+                {t('body_part')}
+              </Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipRow}>
+                {bodyPartKeys.map((bp) => (
+                  <TouchableOpacity
+                    key={bp}
                     style={[
-                      styles.chipText,
-                      { color: customBodyPart === bp ? colors.onPrimaryContainer : colors.onSurface },
+                      styles.chip,
+                      {
+                        backgroundColor:
+                          customBodyPart === bp ? colors.primaryContainer : colors.surfaceContainerHighest,
+                      },
                     ]}
+                    onPress={() => setCustomBodyPart(bp)}
                   >
-                    {t(bodyPartNameKeys[bp] as any)}
-                  </Text>
+                    <Text
+                      style={[
+                        styles.chipText,
+                        { color: customBodyPart === bp ? colors.onPrimaryContainer : colors.onSurface },
+                      ]}
+                    >
+                      {t(bodyPartNameKeys[bp] as any)}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+              <View style={styles.modalActions}>
+                <TouchableOpacity
+                  style={[styles.modalBtn, { backgroundColor: colors.surfaceContainerHighest }]}
+                  onPress={() => setShowCustomModal(false)}
+                >
+                  <Text style={[styles.modalBtnText, { color: colors.onSurface }]}>{t('cancel')}</Text>
                 </TouchableOpacity>
-              ))}
-            </ScrollView>
-            <View style={styles.modalActions}>
-              <TouchableOpacity
-                style={[styles.modalBtn, { backgroundColor: colors.surfaceContainerHighest }]}
-                onPress={() => setShowCustomModal(false)}
-              >
-                <Text style={[styles.modalBtnText, { color: colors.onSurface }]}>{t('cancel')}</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.modalBtn, { backgroundColor: colors.primaryContainer }]}
-                onPress={handleAddCustom}
-              >
-                <Text style={[styles.modalBtnText, { color: colors.onPrimaryContainer }]}>{t('save')}</Text>
-              </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.modalBtn, { backgroundColor: colors.primaryContainer }]}
+                  onPress={handleAddCustom}
+                >
+                  <Text style={[styles.modalBtnText, { color: colors.onPrimaryContainer }]}>{t('save')}</Text>
+                </TouchableOpacity>
+              </View>
             </View>
-          </View>
-        </KeyboardAvoidingView>
+          </ScrollView>
+        </View>
       </Modal>
     </ScreenBackground>
   );
@@ -239,15 +316,18 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   modalOverlay: {
-    flex: 1,
-    justifyContent: 'flex-end',
+    zIndex: 100,
+    justifyContent: 'flex-start',
     backgroundColor: 'rgba(0,0,0,0.6)',
+    paddingHorizontal: 16,
+  },
+  modalScroll: {
+    width: '100%',
   },
   modalContent: {
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
+    borderRadius: 20,
     padding: 24,
-    paddingBottom: 40,
+    paddingBottom: 24,
   },
   modalTitle: {
     fontFamily: 'SpaceGrotesk_700Bold',

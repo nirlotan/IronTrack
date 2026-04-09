@@ -34,33 +34,36 @@ function InnerLayout() {
         <Stack.Screen
           name="active-workout"
           options={{
-            presentation: 'pageSheet',
+            presentation: 'fullScreenModal',
             animation: 'slide_from_bottom',
-            gestureEnabled: true,
+            gestureEnabled: false,
             headerShown: false,
           }}
         />
         <Stack.Screen
           name="create-template"
           options={{
-            presentation: 'formSheet',
+            presentation: 'fullScreenModal',
             animation: 'slide_from_bottom',
+            gestureEnabled: false,
             headerShown: false,
           }}
         />
         <Stack.Screen
           name="edit-template"
           options={{
-            presentation: 'formSheet',
+            presentation: 'fullScreenModal',
             animation: 'slide_from_bottom',
+            gestureEnabled: false,
             headerShown: false,
           }}
         />
         <Stack.Screen
           name="select-exercise"
           options={{
-            presentation: 'formSheet',
+            presentation: 'fullScreenModal',
             animation: 'slide_from_bottom',
+            gestureEnabled: false,
             headerShown: false,
           }}
         />
