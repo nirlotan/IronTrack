@@ -3,6 +3,7 @@ import { getJSON, setJSON, hydrateCache } from '../storage/storage';
 import { defaultExercises } from '../data/exercises';
 import * as Crypto from 'expo-crypto';
 import type { LocaleCode } from '../i18n/locales';
+import { saveStrengthWorkout, initHealthKit } from '../utils/health';
 
 const uuid = () => Crypto.randomUUID();
 import type {
@@ -446,6 +447,12 @@ export const useAppStore = create<AppState>((set, get) => ({
       totalVolume,
       durationMinutes,
     };
+
+    // Save to Apple Health
+    saveStrengthWorkout(startTime, endTime).catch((err) => {
+      console.log('[AppStore] HealthKit save failed:', err);
+    });
+
     const sessions = [session, ...get().sessions];
     set({ sessions, activeWorkout: null });
     setJSON(KEYS.sessions, sessions);
@@ -472,6 +479,9 @@ export const useAppStore = create<AppState>((set, get) => ({
   hydrate: async () => {
     const allKeys = Object.values(KEYS);
     await hydrateCache(allKeys);
+
+    // Initialize HealthKit
+    initHealthKit().catch(console.error);
 
     const language = getJSON<LocaleCode>(KEYS.language);
     const theme = getJSON<ThemeMode>(KEYS.theme);

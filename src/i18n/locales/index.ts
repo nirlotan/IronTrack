@@ -1,12 +1,18 @@
 import en, { type TranslationKeys } from './en';
 import es from './es';
 import he from './he';
+import ru from './ru';
+import ar from './ar';
+import pl from './pl';
 import type { LocaleDefinition, TextDirection } from './types';
 
 export const locales = {
     en,
     es,
     he,
+    ru,
+    ar,
+    pl,
 } as const;
 
 export type LocaleCode = keyof typeof locales;

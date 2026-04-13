@@ -15,9 +15,12 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.irontrack.app",
-      "buildNumber": "3",
+      "buildNumber": "4",
+      "healthKit": true,
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSHealthShareUsageDescription": "IronTrack uses HealthKit to read your workout history and improve your experience.",
+        "NSHealthUpdateUsageDescription": "IronTrack uses HealthKit to log your completed workouts to the Health app."
       }
     },
     "android": {

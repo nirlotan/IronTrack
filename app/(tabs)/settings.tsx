@@ -1,9 +1,15 @@
-import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Switch } from 'react-native';
-import Animated, { FadeInDown } from 'react-native-reanimated';
+import { View, Text, ScrollView, StyleSheet, TouchableOpacity, Switch, LayoutAnimation, Platform, UIManager } from 'react-native';
+import Animated, { FadeInDown, FadeIn, FadeOut } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme, ScreenBackground } from '../../src/theme';
 import { useTranslation, availableLocales } from '../../src/i18n';
 import { useAppStore } from '../../src/store/appStore';
+import { useState, useMemo } from 'react';
+import { Ionicons } from '@expo/vector-icons';
+
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
 
 export default function SettingsScreen() {
   const { colors } = useTheme();
@@ -18,6 +24,18 @@ export default function SettingsScreen() {
   const setRestTimerSeconds = useAppStore((s) => s.setRestTimerSeconds);
   const autoStartRestTimer = useAppStore((s) => s.autoStartRestTimer);
   const setAutoStartRestTimer = useAppStore((s) => s.setAutoStartRestTimer);
+
+  const [isLanguageExpanded, setIsLanguageExpanded] = useState(false);
+
+  const toggleLanguageExpand = () => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setIsLanguageExpanded(!isLanguageExpanded);
+  };
+
+  const displayedLocales = useMemo(() => {
+    if (isLanguageExpanded) return availableLocales;
+    return availableLocales.filter(l => l.code === language);
+  }, [isLanguageExpanded, language]);
 
   return (
     <ScreenBackground style={styles.container}>
@@ -35,40 +53,82 @@ export default function SettingsScreen() {
       >
         {/* Language */}
         <View style={styles.section}>
-          <Text style={[styles.sectionLabel, { color: colors.outlineVariant, textAlign: isRTL ? 'right' : 'left' }]}>
-            {t('language')}
-          </Text>
+          <View style={[styles.sectionHeader, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
+            <Text style={[styles.sectionLabel, { color: colors.outlineVariant, textAlign: isRTL ? 'right' : 'left', marginBottom: 0 }]}>
+              {t('language')}
+            </Text>
+            <TouchableOpacity onPress={toggleLanguageExpand} hitSlop={10}>
+              <Text style={{ color: colors.primary, fontFamily: fontBold, fontSize: 12, textTransform: 'uppercase' }}>
+                {isLanguageExpanded ? t('done') : t('edit')}
+              </Text>
+            </TouchableOpacity>
+          </View>
+          
           <View style={styles.languageList}>
-            {availableLocales.map((locale) => {
+            {displayedLocales.map((locale) => {
               const isSelected = language === locale.code;
 
               return (
                 <TouchableOpacity
                   key={locale.code}
                   style={[
-                    styles.optionBtn,
+                    styles.languageOption,
                     {
                       backgroundColor: isSelected
                         ? colors.primaryContainer
-                        : colors.surfaceContainerHighest,
+                        : colors.surfaceContainerLow,
+                      borderColor: isSelected ? colors.primary : colors.outlineVariant,
+                      borderWidth: isSelected ? 1 : 0,
+                      flexDirection: isRTL ? 'row-reverse' : 'row',
                     },
                   ]}
-                  onPress={() => setLanguage(locale.code)}
+                  onPress={() => {
+                    setLanguage(locale.code);
+                    if (isLanguageExpanded) {
+                        // Keep it open to allow seeing the change, or close it? 
+                        // User might want to change and then click Done.
+                    }
+                  }}
                   accessibilityRole="radio"
                   accessibilityState={{ checked: isSelected }}
                   accessibilityLabel={locale.nativeName}
                 >
-                  <Text
+                  <View style={styles.languageInfo}>
+                    <Text
+                      style={[
+                        styles.languageNativeName,
+                        {
+                          color: isSelected ? colors.onPrimaryContainer : colors.onSurface,
+                          textAlign: isRTL ? 'right' : 'left',
+                          fontFamily: fontBold,
+                        },
+                      ]}
+                    >
+                      {locale.nativeName}
+                    </Text>
+                    <Text
+                      style={[
+                        styles.languageName,
+                        {
+                          color: isSelected ? colors.onPrimaryContainer : colors.onSurfaceVariant,
+                          textAlign: isRTL ? 'right' : 'left',
+                        },
+                      ]}
+                    >
+                      {locale.name}
+                    </Text>
+                  </View>
+                  <View 
                     style={[
-                      styles.optionText,
-                      {
-                        color: isSelected ? colors.onPrimaryContainer : colors.onSurface,
-                        textAlign: locale.direction === 'rtl' ? 'right' : 'left',
-                      },
-                    ]}
+                      styles.radioCircle, 
+                      { 
+                        borderColor: isSelected ? colors.primary : colors.outline,
+                        backgroundColor: isSelected ? colors.primary : 'transparent',
+                      }
+                    ]} 
                   >
-                    {locale.nativeName}
-                  </Text>
+                    {isSelected && <View style={[styles.radioDot, { backgroundColor: colors.onPrimary }]} />}
+                  </View>
                 </TouchableOpacity>
               );
             })}
@@ -203,6 +263,12 @@ const styles = StyleSheet.create({
     letterSpacing: -0.5,
   },
   section: { marginBottom: 32 },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
   sectionLabel: {
     fontFamily: 'SpaceGrotesk_700Bold',
     fontSize: 11,
@@ -211,7 +277,41 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   optionRow: { flexDirection: 'row', gap: 10 },
-  languageList: { flexDirection: 'row', gap: 10, flexWrap: 'wrap' },
+  languageList: { gap: 10, flexDirection: 'column' },
+  languageOption: {
+    borderRadius: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 16,
+  },
+  languageInfo: {
+    flex: 1,
+  },
+  languageNativeName: {
+    fontSize: 16,
+    fontFamily: 'SpaceGrotesk_700Bold',
+  },
+  languageName: {
+    fontSize: 12,
+    fontFamily: 'Manrope_400Regular',
+    marginTop: 2,
+  },
+  radioCircle: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    borderWidth: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  radioDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+  },
+  optionRow: { flexDirection: 'row', gap: 10 },
   optionBtn: {
     flexGrow: 1,
     flexBasis: 0,
