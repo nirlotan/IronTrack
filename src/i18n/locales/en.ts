@@ -21,6 +21,7 @@ const en = {
         ok: 'OK',
         reset: 'Reset',
         skip: 'Skip',
+        hide: 'Hide',
 
         // Tabs
         tab_home: 'Home',
@@ -39,6 +40,7 @@ const en = {
         template_name: 'Template Name',
         edit_template: 'Edit Template',
         delete_template_confirm: 'Delete this template?',
+        delete_session_confirm: 'Delete this session from history?',
         no_templates: 'No workouts yet. Create one!',
 
         // Exercise Library
@@ -150,6 +152,10 @@ const en = {
         theme_dark: 'Dark',
         theme_light: 'Light',
         theme_system: 'System',
+        accent_color: 'Accent Color',
+        accent_green: 'Lime',
+        accent_purple: 'Purple',
+        accent_orange: 'Orange',
         rest_timer_duration: 'Rest Timer (seconds)',
         auto_start_rest_timer: 'Auto-Start Rest Timer',
         auto_start_rest_timer_hint: 'If disabled, tap the clock icon after completing a set.',

@@ -1,3 +1,60 @@
+export const accentColors = {
+  green: {
+    dark: {
+      primary: '#bef264',
+      primaryDim: '#a3e635',
+      primaryContainer: '#cafd00',
+      onPrimary: '#1a2e04',
+      onPrimaryContainer: '#1a2e04',
+      surfaceTint: '#bef264',
+    },
+    light: {
+      primary: '#3f6212',
+      primaryDim: '#365314',
+      primaryContainer: '#bef264',
+      onPrimary: '#f0ffe8',
+      onPrimaryContainer: '#1a2e04',
+      surfaceTint: '#3f6212',
+    },
+  },
+  purple: {
+    dark: {
+      primary: '#d8b4fe',
+      primaryDim: '#c084fc',
+      primaryContainer: '#a855f7',
+      onPrimary: '#2e1065',
+      onPrimaryContainer: '#2e1065',
+      surfaceTint: '#d8b4fe',
+    },
+    light: {
+      primary: '#6b21a8',
+      primaryDim: '#581c87',
+      primaryContainer: '#e9d5ff',
+      onPrimary: '#faf5ff',
+      onPrimaryContainer: '#2e1065',
+      surfaceTint: '#6b21a8',
+    },
+  },
+  orange: {
+    dark: {
+      primary: '#fdba74',
+      primaryDim: '#fb923c',
+      primaryContainer: '#f97316',
+      onPrimary: '#431407',
+      onPrimaryContainer: '#431407',
+      surfaceTint: '#fdba74',
+    },
+    light: {
+      primary: '#9a3412',
+      primaryDim: '#7c2d12',
+      primaryContainer: '#ffedd5',
+      onPrimary: '#fff7ed',
+      onPrimaryContainer: '#431407',
+      surfaceTint: '#9a3412',
+    },
+  },
+};
+
 export const darkColors = {
   surface: '#0e0e0e',
   surfaceContainerLowest: '#000000',
@@ -11,11 +68,7 @@ export const darkColors = {
   onSurface: '#f0ffe8',
   onSurfaceVariant: '#b8d4b8',
   onBackground: '#f0ffe8',
-  primary: '#bef264',
-  primaryDim: '#a3e635',
-  primaryContainer: '#cafd00',
-  onPrimary: '#1a2e04',
-  onPrimaryContainer: '#1a2e04',
+  ...accentColors.green.dark,
   secondary: '#fde047',
   secondaryDim: '#facc15',
   secondaryContainer: '#713f12',
@@ -36,7 +89,6 @@ export const darkColors = {
   inverseSurface: '#f0ffe8',
   inverseOnSurface: '#1a2e04',
   inversePrimary: '#3f6212',
-  surfaceTint: '#bef264',
   gradientColors: ['#0e0e0e', '#07120a'] as string[],
 };
 
@@ -53,12 +105,7 @@ export const lightColors = {
   onSurface: '#1a2e04',
   onSurfaceVariant: '#3a5c1a',
   onBackground: '#1a2e04',
-  // Same lime green as dark theme — used for buttons/containers
-  primary: '#3f6212',
-  primaryDim: '#365314',
-  primaryContainer: '#bef264',
-  onPrimary: '#f0ffe8',
-  onPrimaryContainer: '#1a2e04',
+  ...accentColors.green.light,
   secondary: '#a3e635',
   secondaryDim: '#84cc16',
   secondaryContainer: '#cafd00',
@@ -79,8 +126,15 @@ export const lightColors = {
   inverseSurface: '#1a2e04',
   inverseOnSurface: '#d9f99d',
   inversePrimary: '#bef264',
-  surfaceTint: '#3f6212',
   gradientColors: ['#ffffff', '#f0fde4'] as string[],
 };
 
 export type ThemeColors = typeof darkColors;
+
+export type AccentColor = keyof typeof accentColors;
+
+export function getColors(mode: 'dark' | 'light', accent: AccentColor): ThemeColors {
+  const base = mode === 'dark' ? darkColors : lightColors;
+  const accentPart = accentColors[accent][mode];
+  return { ...base, ...accentPart };
+}

@@ -22,6 +22,7 @@ const ar: LocaleDefinition<Record<TranslationKeys, string>> = {
         ok: 'موافق',
         reset: 'إعادة ضبط',
         skip: 'تخطي',
+        hide: 'إخفاء',
 
         // Tabs
         tab_home: 'الرئيسية',
@@ -40,6 +41,7 @@ const ar: LocaleDefinition<Record<TranslationKeys, string>> = {
         template_name: 'اسم الخطة',
         edit_template: 'تعديل الخطة',
         delete_template_confirm: 'هل تريد حذف هذه الخطة؟',
+        delete_session_confirm: 'هل تريد حذف هذا التمرين من السجل؟',
         no_templates: 'لا توجد خطط بعد. أنشئ واحدة!',
 
         // Exercise Library
@@ -151,6 +153,10 @@ const ar: LocaleDefinition<Record<TranslationKeys, string>> = {
         theme_dark: 'داكن',
         theme_light: 'فاتح',
         theme_system: 'تلقائي',
+        accent_color: 'لون التمييز',
+        accent_green: 'ليموني',
+        accent_purple: 'أرجواني',
+        accent_orange: 'برتقالي',
         rest_timer_duration: 'مدة الراحة (ثانية)',
         auto_start_rest_timer: 'بدء المؤقت تلقائياً',
         auto_start_rest_timer_hint: 'إذا كان معطلاً، اضغط على أيقونة الساعة بعد كل مجموعة.',

@@ -22,6 +22,7 @@ const he: LocaleDefinition<Record<TranslationKeys, string>> = {
         ok: 'אישור',
         reset: 'איפוס',
         skip: 'דילוג',
+        hide: 'הסתר',
 
         // Tabs
         tab_home: 'בית',
@@ -40,6 +41,7 @@ const he: LocaleDefinition<Record<TranslationKeys, string>> = {
         template_name: 'שם תבנית',
         edit_template: 'עריכת תבנית',
         delete_template_confirm: 'למחוק תבנית זו?',
+        delete_session_confirm: 'למחוק אימון זה מההיסטוריה?',
         no_templates: 'אין אימונים עדיין. צור אחד!',
 
         // Exercise Library
@@ -151,6 +153,10 @@ const he: LocaleDefinition<Record<TranslationKeys, string>> = {
         theme_dark: 'כהה',
         theme_light: 'בהיר',
         theme_system: 'מערכת',
+        accent_color: 'צבע דגש',
+        accent_green: 'ליים',
+        accent_purple: 'סגול',
+        accent_orange: 'כתום',
         rest_timer_duration: 'טיימר מנוחה (שניות)',
         auto_start_rest_timer: 'התחל טיימר מנוחה אוטומטית',
         auto_start_rest_timer_hint: 'אם כבוי, לחץ על אייקון השעון לאחר סימון סט כהושלם.',

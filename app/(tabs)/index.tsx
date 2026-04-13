@@ -202,12 +202,18 @@ export default function HomeScreen() {
   const startWorkoutFromTemplate = useAppStore((s) => s.startWorkoutFromTemplate);
   const startEmptyWorkout = useAppStore((s) => s.startEmptyWorkout);
   const startWorkoutFromSession = useAppStore((s) => s.startWorkoutFromSession);
+  const hideRecentSession = useAppStore((s) => s.hideRecentSession);
 
   const [search, setSearch] = useState('');
 
   const filteredTemplates = useMemo(
     () => templates.filter((template) => template.name.toLowerCase().includes(search.toLowerCase())),
     [templates, search]
+  );
+
+  const visibleRecentSessions = useMemo(
+    () => sessions.filter((s) => !s.isHiddenFromRecent).slice(0, 3),
+    [sessions]
   );
 
   const volumeData = useMemo(() => buildLast30DaysVolume(sessions), [sessions]);
@@ -624,14 +630,41 @@ export default function HomeScreen() {
           </TouchableOpacity>
         </View>
 
-        {sessions.slice(0, 3).map((session, index) => (
-          <Animated.View
-            key={session.id}
-            entering={FadeInDown.duration(350).delay(250 + index * 60).damping(20).springify()}
-          >
-            <SessionCard session={session} onRepeat={handleRepeat} />
-          </Animated.View>
-        ))}
+        {visibleRecentSessions.map((session, index) => {
+          const renderHideAction = () => (
+            <RectButton
+              style={[styles.swipeDeleteAction, { backgroundColor: colors.outlineVariant }]}
+              onPress={() => {
+                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                hideRecentSession(session.id);
+              }}
+              accessibilityRole="button"
+              accessibilityLabel={t('hide')}
+            >
+              <MaterialIcons name="visibility-off" size={18} color={colors.onSurfaceVariant} />
+              <Text style={[styles.swipeDeleteText, { color: colors.onSurfaceVariant, fontFamily: fontBold }]}>
+                {t('hide')}
+              </Text>
+            </RectButton>
+          );
+
+          return (
+            <Animated.View
+              key={session.id}
+              entering={FadeInDown.duration(350).delay(250 + index * 60).damping(20).springify()}
+            >
+              <Swipeable
+                overshootLeft={false}
+                overshootRight={false}
+                {...(isRTL
+                  ? { renderLeftActions: renderHideAction }
+                  : { renderRightActions: renderHideAction })}
+              >
+                <SessionCard session={session} onRepeat={handleRepeat} />
+              </Swipeable>
+            </Animated.View>
+          );
+        })}
       </ScrollView>
     </ScreenBackground>
   );

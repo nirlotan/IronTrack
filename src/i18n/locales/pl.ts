@@ -22,6 +22,7 @@ const pl: LocaleDefinition<Record<TranslationKeys, string>> = {
         ok: 'OK',
         reset: 'Resetuj',
         skip: 'Pomiń',
+        hide: 'Ukryj',
 
         // Tabs
         tab_home: 'Główna',
@@ -40,6 +41,7 @@ const pl: LocaleDefinition<Record<TranslationKeys, string>> = {
         template_name: 'Nazwa szablonu',
         edit_template: 'Edytuj szablon',
         delete_template_confirm: 'Usunąć ten szablon?',
+        delete_session_confirm: 'Usunąć ten trening z historii?',
         no_templates: 'Brak planów. Utwórz pierwszy!',
 
         // Exercise Library
@@ -151,6 +153,10 @@ const pl: LocaleDefinition<Record<TranslationKeys, string>> = {
         theme_dark: 'Ciemny',
         theme_light: 'Jasny',
         theme_system: 'Systemowy',
+        accent_color: 'Kolor akcentu',
+        accent_green: 'Limonka',
+        accent_purple: 'Fiolet',
+        accent_orange: 'Pomarańcz',
         rest_timer_duration: 'Czas przerwy (sekundy)',
         auto_start_rest_timer: 'Auto-start timera przerwy',
         auto_start_rest_timer_hint: 'Jeśli wyłączone, dotknij ikonę zegara po serii.',

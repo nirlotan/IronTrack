@@ -1,7 +1,7 @@
-import React, { createContext, useContext } from 'react';
+import React, { createContext, useContext, useMemo } from 'react';
 import { useColorScheme, StyleProp, ViewStyle } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { darkColors, lightColors, type ThemeColors } from './colors';
+import { getColors, type ThemeColors } from './colors';
 import { useAppStore } from '../store/appStore';
 
 type ThemeMode = 'dark' | 'light';
@@ -13,7 +13,7 @@ interface ThemeContextValue {
 }
 
 const ThemeContext = createContext<ThemeContextValue>({
-  colors: darkColors,
+  colors: getColors('dark', 'green'),
   mode: 'dark',
   isDark: true,
 });
@@ -21,6 +21,7 @@ const ThemeContext = createContext<ThemeContextValue>({
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const systemScheme = useColorScheme();
   const themePreference = useAppStore((s) => s.themeMode);
+  const accentColor = useAppStore((s) => s.accentColor);
 
   const mode: ThemeMode =
     themePreference === 'system'
@@ -29,7 +30,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
         : 'dark'
       : themePreference;
 
-  const colors = mode === 'dark' ? darkColors : lightColors;
+  const colors = useMemo(() => getColors(mode, accentColor), [mode, accentColor]);
 
   return (
     <ThemeContext.Provider value={{ colors, mode, isDark: mode === 'dark' }}>
@@ -49,10 +50,18 @@ export function ScreenBackground({
   children: React.ReactNode;
   style?: StyleProp<ViewStyle>;
 }) {
-  const { isDark } = useContext(ThemeContext);
+  const { isDark, colors } = useContext(ThemeContext);
+  
+  const gradientColors = useMemo(() => {
+    if (isDark) {
+      return [colors.surface, colors.background];
+    }
+    return [colors.surface, colors.background];
+  }, [isDark, colors.surface, colors.background]);
+
   return (
     <LinearGradient
-      colors={isDark ? ['#0e0e0e', '#07120a'] : ['#ffffff', '#f0fde4']}
+      colors={gradientColors}
       style={[{ flex: 1 }, style]}
       start={{ x: 0.2, y: 0 }}
       end={{ x: 0.8, y: 1 }}

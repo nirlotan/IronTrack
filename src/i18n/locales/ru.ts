@@ -22,6 +22,7 @@ const ru: LocaleDefinition<Record<TranslationKeys, string>> = {
         ok: 'ОК',
         reset: 'Сбросить',
         skip: 'Пропустить',
+        hide: 'Скрыть',
 
         // Tabs
         tab_home: 'Главная',
@@ -40,6 +41,7 @@ const ru: LocaleDefinition<Record<TranslationKeys, string>> = {
         template_name: 'Название шаблона',
         edit_template: 'Изменить шаблон',
         delete_template_confirm: 'Удалить этот шаблон?',
+        delete_session_confirm: 'Удалить эту тренировку из истории?',
         no_templates: 'Нет программ. Создайте первую!',
 
         // Exercise Library
@@ -151,6 +153,10 @@ const ru: LocaleDefinition<Record<TranslationKeys, string>> = {
         theme_dark: 'Темная',
         theme_light: 'Светлая',
         theme_system: 'Системная',
+        accent_color: 'Акцентный цвет',
+        accent_green: 'Лайм',
+        accent_purple: 'Фиолетовый',
+        accent_orange: 'Оранжевый',
         rest_timer_duration: 'Время отдыха (сек)',
         auto_start_rest_timer: 'Авто-таймер отдыха',
         auto_start_rest_timer_hint: 'Если выключено, запускайте таймер вручную после сета.',

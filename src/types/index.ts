@@ -47,6 +47,7 @@ export interface WorkoutSession {
   exercises: WorkoutExercise[];
   totalVolume?: number;
   durationMinutes?: number;
+  isHiddenFromRecent?: boolean;
 }
 
 export type ActiveWorkoutMode = 'draft' | 'inProgress';

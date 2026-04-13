@@ -21,6 +21,7 @@ const es = {
         ok: 'Aceptar',
         reset: 'Restablecer',
         skip: 'Omitir',
+        hide: 'Ocultar',
 
         // Tabs
         tab_home: 'Inicio',
@@ -39,6 +40,7 @@ const es = {
         template_name: 'Nombre de la rutina',
         edit_template: 'Editar rutina',
         delete_template_confirm: '¿Eliminar esta rutina?',
+        delete_session_confirm: '¿Eliminar este entrenamiento del historial?',
         no_templates: 'Aún no hay rutinas. ¡Crea una!',
 
         // Exercise Library
@@ -150,6 +152,10 @@ const es = {
         theme_dark: 'Oscuro',
         theme_light: 'Claro',
         theme_system: 'Sistema',
+        accent_color: 'Color de acento',
+        accent_green: 'Lima',
+        accent_purple: 'Morado',
+        accent_orange: 'Naranja',
         rest_timer_duration: 'Tiempo de descanso (segundos)',
         auto_start_rest_timer: 'Inicio automático de descanso',
         auto_start_rest_timer_hint: 'Si está desactivado, toca el ícono del reloj tras completar una serie.',

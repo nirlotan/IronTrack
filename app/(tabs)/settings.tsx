@@ -18,9 +18,11 @@ export default function SettingsScreen() {
 
   const language = useAppStore((s) => s.language);
   const themeMode = useAppStore((s) => s.themeMode);
+  const accentColor = useAppStore((s) => s.accentColor);
   const restTimerSeconds = useAppStore((s) => s.restTimerSeconds);
   const setLanguage = useAppStore((s) => s.setLanguage);
   const setThemeMode = useAppStore((s) => s.setThemeMode);
+  const setAccentColor = useAppStore((s) => s.setAccentColor);
   const setRestTimerSeconds = useAppStore((s) => s.setRestTimerSeconds);
   const autoStartRestTimer = useAppStore((s) => s.autoStartRestTimer);
   const setAutoStartRestTimer = useAppStore((s) => s.setAutoStartRestTimer);
@@ -166,6 +168,57 @@ export default function SettingsScreen() {
                 </Text>
               </TouchableOpacity>
             ))}
+          </View>
+        </View>
+
+        {/* Accent Color */}
+        <View style={styles.section}>
+          <Text style={[styles.sectionLabel, { color: colors.outlineVariant, textAlign: isRTL ? 'right' : 'left' }]}>
+            {t('accent_color')}
+          </Text>
+          <View style={styles.optionRow}>
+            {(['green', 'purple', 'orange'] as const).map((acc) => {
+              const previewColors = {
+                green: '#bef264',
+                purple: '#a855f7',
+                orange: '#f97316',
+              };
+              const isSelected = accentColor === acc;
+
+              return (
+                <TouchableOpacity
+                  key={acc}
+                  style={[
+                    styles.optionBtn,
+                    {
+                      backgroundColor: isSelected
+                        ? colors.primaryContainer
+                        : colors.surfaceContainerHighest,
+                      flexDirection: isRTL ? 'row-reverse' : 'row',
+                      gap: 8,
+                    },
+                  ]}
+                  onPress={() => setAccentColor(acc)}
+                >
+                  <View
+                    style={[
+                      styles.colorCircle,
+                      { backgroundColor: previewColors[acc] },
+                    ]}
+                  />
+                  <Text
+                    style={[
+                      styles.optionText,
+                      {
+                        color: isSelected ? colors.onPrimaryContainer : colors.onSurface,
+                      },
+                    ]}
+                  >
+                    {t(`accent_${acc}` as any)}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
           </View>
         </View>
 
@@ -323,6 +376,11 @@ const styles = StyleSheet.create({
   optionText: {
     fontFamily: 'SpaceGrotesk_700Bold',
     fontSize: 14,
+  },
+  colorCircle: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
   },
   timerRow: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
   timerBtn: {

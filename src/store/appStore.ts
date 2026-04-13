@@ -16,11 +16,13 @@ import type {
   BodyPart,
 } from '../types';
 
-type ThemeMode = 'dark' | 'light' | 'system';
+export type ThemeMode = 'dark' | 'light' | 'system';
+export type AccentColor = 'green' | 'purple' | 'orange';
 
 interface AppState {
   language: LocaleCode;
   themeMode: ThemeMode;
+  accentColor: AccentColor;
   restTimerSeconds: number;
   autoStartRestTimer: boolean;
   weeklyGoal: number;
@@ -32,6 +34,7 @@ interface AppState {
   // Actions
   setLanguage: (lang: LocaleCode) => void;
   setThemeMode: (mode: ThemeMode) => void;
+  setAccentColor: (accent: AccentColor) => void;
   setRestTimerSeconds: (s: number) => void;
   setAutoStartRestTimer: (enabled: boolean) => void;
   setWeeklyGoal: (goal: number) => void;
@@ -63,6 +66,8 @@ interface AppState {
   // History helpers
   getLastSessionForExercise: (exerciseId: string) => SetRecord[] | null;
   getLastSessionForTemplate: (templateId: string) => WorkoutSession | null;
+  hideRecentSession: (id: string) => void;
+  deleteSession: (id: string) => void;
 
   // Hydrate
   hydrate: () => Promise<void>;
@@ -71,6 +76,7 @@ interface AppState {
 const KEYS = {
   language: 'app_language',
   theme: 'app_theme',
+  accent: 'app_accent_color',
   restTimer: 'app_rest_timer',
   autoStartRestTimer: 'app_auto_start_rest_timer',
   weeklyGoal: 'app_weekly_goal',
@@ -100,6 +106,7 @@ function normalizeTemplate(template: WorkoutTemplate & { exercises: any[] }): Wo
 export const useAppStore = create<AppState>((set, get) => ({
   language: 'he',
   themeMode: 'dark',
+  accentColor: 'green',
   restTimerSeconds: 90,
   autoStartRestTimer: true,
   weeklyGoal: 4,
@@ -116,6 +123,11 @@ export const useAppStore = create<AppState>((set, get) => ({
   setThemeMode: (mode) => {
     set({ themeMode: mode });
     setJSON(KEYS.theme, mode);
+  },
+
+  setAccentColor: (accent) => {
+    set({ accentColor: accent });
+    setJSON(KEYS.accent, accent);
   },
 
   setRestTimerSeconds: (s) => {
@@ -472,8 +484,20 @@ export const useAppStore = create<AppState>((set, get) => ({
     return null;
   },
 
-  getLastSessionForTemplate: (templateId) => {
-    return get().sessions.find((s) => s.templateId === templateId) ?? null;
+  getLastSessionForTemplate: (templateIdId) => {
+    return get().sessions.find((s) => s.templateId === templateIdId) ?? null;
+  },
+
+  hideRecentSession: (id) => {
+    const sessions = get().sessions.map((s) => (s.id === id ? { ...s, isHiddenFromRecent: true } : s));
+    set({ sessions });
+    setJSON(KEYS.sessions, sessions);
+  },
+
+  deleteSession: (id) => {
+    const sessions = get().sessions.filter((s) => s.id !== id);
+    set({ sessions });
+    setJSON(KEYS.sessions, sessions);
   },
 
   hydrate: async () => {
@@ -485,6 +509,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 
     const language = getJSON<LocaleCode>(KEYS.language);
     const theme = getJSON<ThemeMode>(KEYS.theme);
+    const accentColor = getJSON<AccentColor>(KEYS.accent);
     const restTimer = getJSON<number>(KEYS.restTimer);
     const autoStartRestTimer = getJSON<boolean>(KEYS.autoStartRestTimer);
     const weeklyGoal = getJSON<number>(KEYS.weeklyGoal);
@@ -505,6 +530,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({
       language: language ?? 'he',
       themeMode: theme ?? 'dark',
+      accentColor: accentColor ?? 'green',
       restTimerSeconds: restTimer ?? 90,
       autoStartRestTimer: autoStartRestTimer ?? true,
       weeklyGoal: weeklyGoal ?? 4,
