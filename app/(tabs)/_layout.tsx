@@ -1,11 +1,13 @@
 import { Tabs } from 'expo-router';
 import { usePathname, useRouter } from 'expo-router';
-import { Platform, StyleSheet, View, Text, TouchableOpacity } from 'react-native';
+import { Platform, StyleSheet, View, Text } from 'react-native';
+import Animated, { FadeInUp, FadeOutDown, SlideInDown, SlideOutDown } from 'react-native-reanimated';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useTheme } from '../../src/theme';
 import { useTranslation } from '../../src/i18n';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAppStore } from '../../src/store/appStore';
+import { AnimatedPressable } from '../../src/components/AnimatedPressable';
 
 export default function TabsLayout() {
   const { colors, isDark } = useTheme();
@@ -124,7 +126,9 @@ export default function TabsLayout() {
         />
       </Tabs>
       {showNowTrainingBar && (
-        <TouchableOpacity
+        <Animated.View
+          entering={SlideInDown.duration(350).damping(18).springify()}
+          exiting={SlideOutDown.duration(250)}
           style={[
             styles.nowTrainingContainer,
             {
@@ -133,18 +137,21 @@ export default function TabsLayout() {
               borderColor: isDark ? 'rgba(117,154,117,0.32)' : 'rgba(65,102,65,0.16)',
             },
           ]}
-          onPress={() => router.push('/active-workout')}
-          activeOpacity={0.85}
         >
-          <MaterialIcons name="fitness-center" size={16} color={colors.primary} />
-          <Text style={[styles.nowTrainingText, { color: colors.onSurface, fontFamily: fontBold }]}>
-            {t('now_training')}
-          </Text>
-          <View style={styles.nowTrainingSpacer} />
-          <Text style={[styles.resumeText, { color: colors.primary, fontFamily: fontBold }]}>
-            {t('resume')}
-          </Text>
-        </TouchableOpacity>
+          <AnimatedPressable
+            style={styles.nowTrainingInner}
+            onPress={() => router.push('/active-workout')}
+          >
+            <MaterialIcons name="fitness-center" size={16} color={colors.primary} />
+            <Text style={[styles.nowTrainingText, { color: colors.onSurface, fontFamily: fontBold }]}>
+              {t('now_training')}
+            </Text>
+            <View style={styles.nowTrainingSpacer} />
+            <Text style={[styles.resumeText, { color: colors.primary, fontFamily: fontBold }]}>
+              {t('resume')}
+            </Text>
+          </AnimatedPressable>
+        </Animated.View>
       )}
     </>
   );
@@ -164,10 +171,13 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     borderWidth: 1,
     minHeight: 44,
+    paddingHorizontal: 14,
+  },
+  nowTrainingInner: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 14,
     gap: 8,
+    paddingVertical: 10,
   },
   nowTrainingText: {
     fontSize: 13,

@@ -5,6 +5,7 @@ import { useTheme } from '../theme';
 import { useTranslation } from '../i18n';
 import { useAppStore } from '../store/appStore';
 import { getExerciseName, formatVolume } from '../utils/helpers';
+import { AnimatedPressable } from './AnimatedPressable';
 import type { WorkoutSession } from '../types';
 
 interface SessionCardProps {
@@ -90,10 +91,10 @@ export const SessionCard = memo(function SessionCard({ session, onRepeat }: Sess
                     ))}
                 </ScrollView>
 
-                <TouchableOpacity
+                <AnimatedPressable
                     style={[styles.repeatBtn, { backgroundColor: colors.primaryContainer }]}
                     onPress={() => onRepeat(session.id)}
-                    activeOpacity={0.8}
+                    haptic
                     accessibilityRole="button"
                     accessibilityLabel={t('repeat_workout')}
                 >
@@ -101,7 +102,7 @@ export const SessionCard = memo(function SessionCard({ session, onRepeat }: Sess
                     <Text style={[styles.repeatBtnText, { color: colors.onPrimaryContainer, fontFamily: fontBold }]}>
                         {t('repeat_workout')}
                     </Text>
-                </TouchableOpacity>
+                </AnimatedPressable>
             </View>
         </View>
     );

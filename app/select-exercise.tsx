@@ -11,6 +11,7 @@ import {
   Pressable,
   useWindowDimensions,
 } from 'react-native';
+import Animated, { SlideInDown, SlideOutUp } from 'react-native-reanimated';
 import { ScrollView } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -183,84 +184,90 @@ export default function SelectExerciseScreen() {
               setShowCustomModal(false);
             }}
           />
-          <ScrollView
-            style={styles.modalScroll}
-            contentContainerStyle={{
-              paddingTop: insets.top + 20,
-              paddingBottom: Math.max(insets.bottom, 16) + keyboardInset,
-            }}
-            keyboardShouldPersistTaps="handled"
-            keyboardDismissMode="interactive"
-            automaticallyAdjustKeyboardInsets
-            showsVerticalScrollIndicator={false}
+          <Animated.View
+            entering={SlideInDown}
+            exiting={SlideOutUp}
+            style={{ width: '100%' }}
           >
-            <View
-              style={[
-                styles.modalContent,
-                {
-                  backgroundColor: colors.surfaceContainer,
-                  maxHeight: windowHeight - insets.top - insets.bottom - 24,
-                  marginBottom: keyboardInset,
-                },
-              ]}
+            <ScrollView
+              style={styles.modalScroll}
+              contentContainerStyle={{
+                paddingTop: insets.top,
+                paddingBottom: Math.max(insets.bottom, 16) + keyboardInset,
+              }}
+              keyboardShouldPersistTaps="handled"
+              keyboardDismissMode="interactive"
+              automaticallyAdjustKeyboardInsets
+              showsVerticalScrollIndicator={false}
             >
-              <Text style={[styles.modalTitle, { color: colors.onSurface, textAlign: isRTL ? 'right' : 'left' }]}>
-                {t('add_custom_exercise')}
-              </Text>
-              <TextInput
-                style={[styles.modalInput, { backgroundColor: colors.surfaceContainerLow, color: colors.onSurface }]}
-                placeholder={t('exercise_name')}
-                placeholderTextColor={colors.outlineVariant}
-                value={customName}
-                onChangeText={setCustomName}
-                textAlign={isRTL ? 'right' : 'left'}
-                ref={customNameRef}
-                returnKeyType="done"
-                onSubmitEditing={handleAddCustom}
-              />
-              <Text style={[styles.modalLabel, { color: colors.onSurfaceVariant, textAlign: isRTL ? 'right' : 'left' }]}>
-                {t('body_part')}
-              </Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipRow}>
-                {bodyPartKeys.map((bp) => (
-                  <TouchableOpacity
-                    key={bp}
-                    style={[
-                      styles.chip,
-                      {
-                        backgroundColor:
-                          customBodyPart === bp ? colors.primaryContainer : colors.surfaceContainerHighest,
-                      },
-                    ]}
-                    onPress={() => setCustomBodyPart(bp)}
-                  >
-                    <Text
+              <View
+                style={[
+                  styles.modalContent,
+                  {
+                    backgroundColor: colors.surfaceContainer,
+                    maxHeight: windowHeight - insets.top - insets.bottom - 24,
+                    marginBottom: keyboardInset,
+                  },
+                ]}
+              >
+                <Text style={[styles.modalTitle, { color: colors.onSurface, textAlign: isRTL ? 'right' : 'left' }]}>
+                  {t('add_custom_exercise')}
+                </Text>
+                <TextInput
+                  style={[styles.modalInput, { backgroundColor: colors.surfaceContainerLow, color: colors.onSurface }]}
+                  placeholder={t('exercise_name')}
+                  placeholderTextColor={colors.outlineVariant}
+                  value={customName}
+                  onChangeText={setCustomName}
+                  textAlign={isRTL ? 'right' : 'left'}
+                  ref={customNameRef}
+                  returnKeyType="done"
+                  onSubmitEditing={handleAddCustom}
+                />
+                <Text style={[styles.modalLabel, { color: colors.onSurfaceVariant, textAlign: isRTL ? 'right' : 'left' }]}>
+                  {t('body_part')}
+                </Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipRow}>
+                  {bodyPartKeys.map((bp) => (
+                    <TouchableOpacity
+                      key={bp}
                       style={[
-                        styles.chipText,
-                        { color: customBodyPart === bp ? colors.onPrimaryContainer : colors.onSurface },
+                        styles.chip,
+                        {
+                          backgroundColor:
+                            customBodyPart === bp ? colors.primaryContainer : colors.surfaceContainerHighest,
+                        },
                       ]}
+                      onPress={() => setCustomBodyPart(bp)}
                     >
-                      {t(bodyPartNameKeys[bp] as any)}
-                    </Text>
+                      <Text
+                        style={[
+                          styles.chipText,
+                          { color: customBodyPart === bp ? colors.onPrimaryContainer : colors.onSurface },
+                        ]}
+                      >
+                        {t(bodyPartNameKeys[bp] as any)}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+                <View style={styles.modalActions}>
+                  <TouchableOpacity
+                    style={[styles.modalBtn, { backgroundColor: colors.surfaceContainerHighest }]}
+                    onPress={() => setShowCustomModal(false)}
+                  >
+                    <Text style={[styles.modalBtnText, { color: colors.onSurface }]}>{t('cancel')}</Text>
                   </TouchableOpacity>
-                ))}
-              </ScrollView>
-              <View style={styles.modalActions}>
-                <TouchableOpacity
-                  style={[styles.modalBtn, { backgroundColor: colors.surfaceContainerHighest }]}
-                  onPress={() => setShowCustomModal(false)}
-                >
-                  <Text style={[styles.modalBtnText, { color: colors.onSurface }]}>{t('cancel')}</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.modalBtn, { backgroundColor: colors.primaryContainer }]}
-                  onPress={handleAddCustom}
-                >
-                  <Text style={[styles.modalBtnText, { color: colors.onPrimaryContainer }]}>{t('save')}</Text>
-                </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.modalBtn, { backgroundColor: colors.primaryContainer }]}
+                    onPress={handleAddCustom}
+                  >
+                    <Text style={[styles.modalBtnText, { color: colors.onPrimaryContainer }]}>{t('save')}</Text>
+                  </TouchableOpacity>
+                </View>
               </View>
-            </View>
-          </ScrollView>
+            </ScrollView>
+          </Animated.View>
         </View>
       </Modal>
     </ScreenBackground>
@@ -316,16 +323,16 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   modalOverlay: {
-    zIndex: 100,
+    flex: 1,
     justifyContent: 'flex-start',
     backgroundColor: 'rgba(0,0,0,0.6)',
-    paddingHorizontal: 16,
   },
   modalScroll: {
     width: '100%',
   },
   modalContent: {
-    borderRadius: 20,
+    borderBottomLeftRadius: 20,
+    borderBottomRightRadius: 20,
     padding: 24,
     paddingBottom: 24,
   },

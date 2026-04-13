@@ -9,6 +9,7 @@ import {
   View,
   ScrollView,
 } from 'react-native';
+import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
 import { useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
 import Swipeable from 'react-native-gesture-handler/Swipeable';
@@ -21,6 +22,7 @@ import { useTranslation } from '../../src/i18n';
 import { useAppStore } from '../../src/store/appStore';
 import { SearchBox } from '../../src/components/SearchBox';
 import { SessionCard } from '../../src/components/SessionCard';
+import { AnimatedPressable } from '../../src/components/AnimatedPressable';
 import { formatVolume } from '../../src/utils/helpers';
 import type { WorkoutTemplate } from '../../src/types';
 
@@ -171,15 +173,16 @@ function TemplateCard({
           </TouchableOpacity>
         </View>
 
-        <TouchableOpacity
+        <AnimatedPressable
           style={[styles.startBtn, { backgroundColor: colors.primaryContainer }]}
           onPress={() => onStart(template.id)}
+          haptic
         >
           <MaterialIcons name="play-arrow" size={18} color={colors.onPrimaryContainer} />
           <Text style={[styles.startBtnText, { color: colors.onPrimaryContainer, fontFamily: fontBold }]}>
             {t('start')}
           </Text>
-        </TouchableOpacity>
+        </AnimatedPressable>
       </View>
     </Swipeable>
   );
@@ -333,7 +336,10 @@ export default function HomeScreen() {
         scrollEventThrottle={16}
         nestedScrollEnabled={true}
       >
-        <View style={[styles.titleRow, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
+        <Animated.View
+          entering={FadeInDown.duration(400).delay(0).damping(20).springify()}
+          style={[styles.titleRow, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}
+        >
           <Text
             style={[
               styles.title,
@@ -342,8 +348,9 @@ export default function HomeScreen() {
           >
             {t('tab_home')}
           </Text>
-          <TouchableOpacity
+          <AnimatedPressable
             onPress={handleStartEmpty}
+            haptic
             style={[
               styles.emptyWorkoutBtn,
               {
@@ -361,10 +368,11 @@ export default function HomeScreen() {
             >
               {t('start_empty_workout')}
             </Text>
-          </TouchableOpacity>
-        </View>
+          </AnimatedPressable>
+        </Animated.View>
 
-        <View
+        <Animated.View
+          entering={FadeInDown.duration(450).delay(80).damping(18).springify()}
           style={[
             styles.dashboardWidget,
             {
@@ -556,11 +564,11 @@ export default function HomeScreen() {
               </View>
             </View>
           </View>
-        </View>
+        </Animated.View>
 
         <SearchBox value={search} onChangeText={setSearch} placeholder={t('templates_search')} />
 
-        <TouchableOpacity
+        <AnimatedPressable
           style={[
             styles.createTemplateBtn,
             {
@@ -579,16 +587,20 @@ export default function HomeScreen() {
           >
             {t('create_template')}
           </Text>
-        </TouchableOpacity>
+        </AnimatedPressable>
 
-        {filteredTemplates.map((template) => (
-          <TemplateCard
+        {filteredTemplates.map((template, index) => (
+          <Animated.View
             key={template.id}
-            template={template}
-            onStart={handleStartFromTemplate}
-            onEdit={showTemplateOptions}
-            onDelete={confirmDeleteTemplate}
-          />
+            entering={FadeInDown.duration(350).delay(150 + index * 50).damping(20).springify()}
+          >
+            <TemplateCard
+              template={template}
+              onStart={handleStartFromTemplate}
+              onEdit={showTemplateOptions}
+              onDelete={confirmDeleteTemplate}
+            />
+          </Animated.View>
         ))}
 
         <View style={[styles.historyHeaderRow, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
@@ -612,8 +624,13 @@ export default function HomeScreen() {
           </TouchableOpacity>
         </View>
 
-        {sessions.slice(0, 3).map((session) => (
-          <SessionCard key={session.id} session={session} onRepeat={handleRepeat} />
+        {sessions.slice(0, 3).map((session, index) => (
+          <Animated.View
+            key={session.id}
+            entering={FadeInDown.duration(350).delay(250 + index * 60).damping(20).springify()}
+          >
+            <SessionCard session={session} onRepeat={handleRepeat} />
+          </Animated.View>
         ))}
       </ScrollView>
     </ScreenBackground>

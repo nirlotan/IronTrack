@@ -6,6 +6,7 @@ import {
   StyleSheet,
   TouchableOpacity,
 } from 'react-native';
+import Animated, { FadeInDown } from 'react-native-reanimated';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -55,8 +56,12 @@ export default function HistoryScreen() {
       <FlatList
         data={filtered}
         keyExtractor={(item: WorkoutSession) => item.id}
-        renderItem={({ item }) => (
-          <SessionCard session={item} onRepeat={handleRepeat} />
+        renderItem={({ item, index }) => (
+          <Animated.View
+            entering={FadeInDown.duration(350).delay(Math.min(index * 50, 300)).damping(20).springify()}
+          >
+            <SessionCard session={item} onRepeat={handleRepeat} />
+          </Animated.View>
         )}
         ListHeaderComponent={
           <View>
