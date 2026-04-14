@@ -34,9 +34,17 @@ case "$TARGET" in
     echo "Starting Expo dev server..."
     npm run start
     ;;
+  dev)
+    echo "Starting Expo dev client..."
+    npm run dev
+    ;;
+  build)
+    echo "Building iOS development client..."
+    npm run build:dev:ios
+    ;;
   *)
     echo "Unknown target: $TARGET"
-    echo "Usage: ./run-app.sh [web|ios|android|start]"
+    echo "Usage: ./run-app.sh [web|ios|android|start|dev|build]"
     exit 1
     ;;
 esac
