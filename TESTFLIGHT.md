@@ -239,7 +239,7 @@ Go to **App Privacy → Get Started**. For IronTrack:
 
 | Data type | Collected? | Used for |
 |---|---|---|
-| Health & Fitness | **Yes** (synced to Apple Health, stored locally) | Logging workouts to Apple Health |
+| Health & Fitness | **No** (stored locally, never sent to any server) | — |
 | Identifiers | **No** | — |
 | Usage Data | **No** | — |
 
