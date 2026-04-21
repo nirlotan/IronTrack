@@ -144,6 +144,8 @@ const es = {
         minutes: 'min',
         kg_lifted: 'KG LEVANTADOS',
         no_history: 'Aún no hay entrenamientos. ¡Empieza a entrenar!',
+        save_as_template: 'Guardar como rutina',
+        template_created: '¡Rutina creada!',
 
         // Settings
         settings_title: 'Ajustes',

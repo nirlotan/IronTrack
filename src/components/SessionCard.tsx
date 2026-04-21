@@ -1,5 +1,5 @@
 import { memo } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useTheme } from '../theme';
 import { useTranslation } from '../i18n';
@@ -11,9 +11,10 @@ import type { WorkoutSession } from '../types';
 interface SessionCardProps {
     session: WorkoutSession;
     onRepeat: (sessionId: string) => void;
+    onLongPress?: (sessionId: string) => void;
 }
 
-export const SessionCard = memo(function SessionCard({ session, onRepeat }: SessionCardProps) {
+export const SessionCard = memo(function SessionCard({ session, onRepeat, onLongPress }: SessionCardProps) {
     const { colors } = useTheme();
     const { t, isRTL, language, fontBold, fontRegular } = useTranslation();
     const exercises = useAppStore((s) => s.exercises);
@@ -28,7 +29,18 @@ export const SessionCard = memo(function SessionCard({ session, onRepeat }: Sess
     });
 
     return (
-        <View style={[styles.card, { backgroundColor: colors.surfaceContainerLow }]}>
+        <Pressable
+            onLongPress={() => onLongPress?.(session.id)}
+            delayLongPress={500}
+            style={({ pressed }) => [
+                styles.card,
+                {
+                    backgroundColor: colors.surfaceContainerLow,
+                    opacity: pressed ? 0.9 : 1,
+                    transform: [{ scale: pressed ? 0.98 : 1 }]
+                }
+            ]}
+        >
             <Text style={[styles.ghostText, { color: colors.onSurface }]}>
                 {session.name.substring(0, 8).toUpperCase()}
             </Text>
@@ -104,9 +116,10 @@ export const SessionCard = memo(function SessionCard({ session, onRepeat }: Sess
                     </Text>
                 </AnimatedPressable>
             </View>
-        </View>
+        </Pressable>
     );
 });
+
 
 const styles = StyleSheet.create({
     card: {

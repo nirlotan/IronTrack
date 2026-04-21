@@ -42,6 +42,8 @@ const en = {
         delete_template_confirm: 'Delete this template?',
         delete_session_confirm: 'Delete this session from history?',
         no_templates: 'No workouts yet. Create one!',
+        save_as_template: 'Save as Template',
+        template_created: 'Template created!',
 
         // Exercise Library
         library_title: 'Library',

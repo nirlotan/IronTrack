@@ -25,8 +25,6 @@ export default function TabsLayout() {
       <Tabs
         screenOptions={{
           headerShown: true,
-          headerLargeTitle: Platform.OS === 'ios',
-          headerLargeTitleShadowVisible: false,
           headerTransparent: false,
           headerStyle: {
             backgroundColor: colors.surfaceContainerHighest,
@@ -48,7 +46,6 @@ export default function TabsLayout() {
             height: 70 + insets.bottom + (showNowTrainingBar ? 52 : 0),
             paddingTop: 8,
             paddingBottom: insets.bottom + 4,
-            translucent: true,
             ...(Platform.OS === 'ios' && {
               position: 'absolute' as const,
             }),
@@ -78,7 +75,6 @@ export default function TabsLayout() {
           name="index"
           options={{
             title: t('tab_home'),
-            largeTitle: t('tab_home'),
             headerShown: true,
             tabBarIcon: ({ focused, color }) => (
               <MaterialIcons name="assignment" size={24} color={color} />
@@ -89,7 +85,6 @@ export default function TabsLayout() {
           name="library"
           options={{
             title: t('tab_library'),
-            largeTitle: t('tab_library'),
             headerShown: true,
             tabBarIcon: ({ focused, color }) => (
               <MaterialIcons name="menu-book" size={24} color={color} />
@@ -100,7 +95,6 @@ export default function TabsLayout() {
           name="history"
           options={{
             title: t('tab_history'),
-            largeTitle: t('tab_history'),
             headerShown: true,
             tabBarIcon: ({ focused, color }) => (
               <MaterialIcons name="bar-chart" size={24} color={color} />
@@ -111,7 +105,6 @@ export default function TabsLayout() {
           name="settings"
           options={{
             title: t('tab_settings'),
-            largeTitle: t('tab_settings'),
             headerShown: true,
             tabBarIcon: ({ focused, color }) => (
               <MaterialIcons name="tune" size={24} color={color} />

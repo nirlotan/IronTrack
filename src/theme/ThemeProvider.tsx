@@ -24,11 +24,9 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const accentColor = useAppStore((s) => s.accentColor);
 
   const mode: ThemeMode =
-    themePreference === 'system'
-      ? systemScheme === 'light'
-        ? 'light'
-        : 'dark'
-      : themePreference;
+    themePreference === 'light'
+      ? 'light'
+      : 'dark';
 
   const colors = useMemo(() => getColors(mode, accentColor), [mode, accentColor]);
 
@@ -50,18 +48,17 @@ export function ScreenBackground({
   children: React.ReactNode;
   style?: StyleProp<ViewStyle>;
 }) {
-  const { isDark, colors } = useContext(ThemeContext);
+  const { colors } = useContext(ThemeContext);
   
   const gradientColors = useMemo(() => {
-    if (isDark) {
-      return [colors.surface, colors.background];
-    }
+    // We use a slight variation of the surface/background colors for a subtle gradient
+    // In light mode, this helps with the accent tinting
     return [colors.surface, colors.background];
-  }, [isDark, colors.surface, colors.background]);
+  }, [colors.surface, colors.background]);
 
   return (
     <LinearGradient
-      colors={gradientColors}
+      colors={gradientColors as any}
       style={[{ flex: 1 }, style]}
       start={{ x: 0.2, y: 0 }}
       end={{ x: 0.8, y: 1 }}

@@ -145,6 +145,8 @@ const ar: LocaleDefinition<Record<TranslationKeys, string>> = {
         minutes: 'دقيقة',
         kg_lifted: 'كجم مرفوع',
         no_history: 'لا يوجد سجل بعد. ابدأ التمرين!',
+        save_as_template: 'حفظ كخطة تمرين',
+        template_created: 'تم إنشاء الخطة!',
 
         // Settings
         settings_title: 'الإعدادات',

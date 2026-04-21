@@ -4,6 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme, ScreenBackground } from '../../src/theme';
 import { useTranslation, availableLocales } from '../../src/i18n';
 import { useAppStore } from '../../src/store/appStore';
+import { AnimatedPressable } from '../../src/components/AnimatedPressable';
 import { useState, useMemo } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -59,11 +60,6 @@ export default function SettingsScreen() {
             <Text style={[styles.sectionLabel, { color: colors.outlineVariant, textAlign: isRTL ? 'right' : 'left', marginBottom: 0 }]}>
               {t('language')}
             </Text>
-            <TouchableOpacity onPress={toggleLanguageExpand} hitSlop={10}>
-              <Text style={{ color: colors.primary, fontFamily: fontBold, fontSize: 12, textTransform: 'uppercase' }}>
-                {isLanguageExpanded ? t('done') : t('edit')}
-              </Text>
-            </TouchableOpacity>
           </View>
           
           <View style={styles.languageList}>
@@ -71,7 +67,7 @@ export default function SettingsScreen() {
               const isSelected = language === locale.code;
 
               return (
-                <TouchableOpacity
+                <AnimatedPressable
                   key={locale.code}
                   style={[
                     styles.languageOption,
@@ -80,19 +76,22 @@ export default function SettingsScreen() {
                         ? colors.primaryContainer
                         : colors.surfaceContainerLow,
                       borderColor: isSelected ? colors.primary : colors.outlineVariant,
-                      borderWidth: isSelected ? 1 : 0,
+                      borderWidth: 1.5,
                       flexDirection: isRTL ? 'row-reverse' : 'row',
                     },
                   ]}
                   onPress={() => {
-                    setLanguage(locale.code);
-                    if (isLanguageExpanded) {
-                        // Keep it open to allow seeing the change, or close it? 
-                        // User might want to change and then click Done.
+                    if (!isLanguageExpanded) {
+                      toggleLanguageExpand();
+                    } else {
+                      if (!isSelected) {
+                        setLanguage(locale.code as any);
+                      }
+                      toggleLanguageExpand();
                     }
                   }}
+                  haptic
                   accessibilityRole="radio"
-                  accessibilityState={{ checked: isSelected }}
                   accessibilityLabel={locale.nativeName}
                 >
                   <View style={styles.languageInfo}>
@@ -126,12 +125,13 @@ export default function SettingsScreen() {
                       { 
                         borderColor: isSelected ? colors.primary : colors.outline,
                         backgroundColor: isSelected ? colors.primary : 'transparent',
+                        borderWidth: 2,
                       }
                     ]} 
                   >
                     {isSelected && <View style={[styles.radioDot, { backgroundColor: colors.onPrimary }]} />}
                   </View>
-                </TouchableOpacity>
+                </AnimatedPressable>
               );
             })}
           </View>
@@ -364,7 +364,6 @@ const styles = StyleSheet.create({
     height: 10,
     borderRadius: 5,
   },
-  optionRow: { flexDirection: 'row', gap: 10 },
   optionBtn: {
     flexGrow: 1,
     flexBasis: 0,

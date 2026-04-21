@@ -145,6 +145,8 @@ const pl: LocaleDefinition<Record<TranslationKeys, string>> = {
         minutes: 'min',
         kg_lifted: 'KG PODNIESIONE',
         no_history: 'Brak treningów. Zacznij ćwiczyć!',
+        save_as_template: 'Zapisz jako szablon',
+        template_created: 'Szablon utworzony!',
 
         // Settings
         settings_title: 'Ustawienia',

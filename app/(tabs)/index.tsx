@@ -114,6 +114,7 @@ function TemplateCard({
   onEdit,
   onDelete,
 }: {
+  template: WorkoutTemplate;
   onStart: (id: string) => void;
   onEdit: (id: string) => void;
   onDelete: (id: string) => void;
@@ -121,7 +122,7 @@ function TemplateCard({
   const { colors } = useTheme();
   const { t, isRTL, fontBold, fontRegular } = useTranslation();
 
-  const totalSets = template.exercises.reduce((sum, item) => sum + item.sets, 0);
+  const totalSets = template.exercises.reduce((sum: number, item: any) => sum + item.sets, 0);
 
   const renderDeleteAction = () => (
     <RectButton
@@ -203,12 +204,69 @@ export default function HomeScreen() {
   const startEmptyWorkout = useAppStore((s) => s.startEmptyWorkout);
   const startWorkoutFromSession = useAppStore((s) => s.startWorkoutFromSession);
   const hideRecentSession = useAppStore((s) => s.hideRecentSession);
+  const createTemplateFromSession = useAppStore((s) => s.createTemplateFromSession);
 
   const [search, setSearch] = useState('');
 
   const filteredTemplates = useMemo(
     () => templates.filter((template) => template.name.toLowerCase().includes(search.toLowerCase())),
     [templates, search]
+  );
+
+  const handleRepeat = useCallback(
+    (sessionId: string) => {
+      startWorkoutFromSession(sessionId);
+      router.push('/active-workout');
+    },
+    [startWorkoutFromSession, router]
+  );
+
+  const handleLongPress = useCallback(
+    (sessionId: string) => {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+
+      const options = [t('cancel'), t('save_as_template'), t('hide')];
+      const destructiveButtonIndex = 2;
+      const cancelButtonIndex = 0;
+
+      if (Platform.OS === 'ios') {
+        ActionSheetIOS.showActionSheetWithOptions(
+          {
+            options,
+            cancelButtonIndex,
+            destructiveButtonIndex,
+            title: t('app_name'),
+          },
+          (buttonIndex) => {
+            if (buttonIndex === 1) {
+              createTemplateFromSession(sessionId);
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+              Alert.alert(t('done'), t('template_created'));
+            } else if (buttonIndex === 2) {
+              hideRecentSession(sessionId);
+            }
+          }
+        );
+      } else {
+        Alert.alert(t('app_name'), '', [
+          { text: t('cancel'), style: 'cancel' },
+          {
+            text: t('save_as_template'),
+            onPress: () => {
+              createTemplateFromSession(sessionId);
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+              Alert.alert(t('done'), t('template_created'));
+            },
+          },
+          {
+            text: t('hide'),
+            style: 'destructive',
+            onPress: () => hideRecentSession(sessionId),
+          },
+        ]);
+      }
+    },
+    [createTemplateFromSession, t, hideRecentSession]
   );
 
   const visibleRecentSessions = useMemo(
@@ -325,14 +383,6 @@ export default function HomeScreen() {
     startEmptyWorkout();
     router.push('/active-workout');
   }, [startEmptyWorkout, router]);
-
-  const handleRepeat = useCallback(
-    (sessionId: string) => {
-      startWorkoutFromSession(sessionId);
-      router.push('/active-workout');
-    },
-    [startWorkoutFromSession, router]
-  );
 
   return (
     <ScreenBackground style={styles.container}>
@@ -660,7 +710,11 @@ export default function HomeScreen() {
                   ? { renderLeftActions: renderHideAction }
                   : { renderRightActions: renderHideAction })}
               >
-                <SessionCard session={session} onRepeat={handleRepeat} />
+                <SessionCard 
+                  session={session} 
+                  onRepeat={handleRepeat} 
+                  onLongPress={handleLongPress}
+                />
               </Swipeable>
             </Animated.View>
           );

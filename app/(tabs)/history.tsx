@@ -6,6 +6,8 @@ import {
   StyleSheet,
   TouchableOpacity,
   Alert,
+  ActionSheetIOS,
+  Platform,
 } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -30,6 +32,7 @@ export default function HistoryScreen() {
   const sessions = useAppStore((s) => s.sessions);
   const startWorkoutFromSession = useAppStore((s) => s.startWorkoutFromSession);
   const deleteSession = useAppStore((s) => s.deleteSession);
+  const createTemplateFromSession = useAppStore((s) => s.createTemplateFromSession);
 
   const filtered = sessions.filter((s) =>
     s.name.toLowerCase().includes(search.toLowerCase())
@@ -45,7 +48,7 @@ export default function HistoryScreen() {
 
   const confirmDelete = useCallback(
     (sessionId: string) => {
-      Alert.alert(t('delete'), t('delete_session_confirm', { defaultValue: 'Delete this session from history?' }), [
+      Alert.alert(t('delete'), t('delete_session_confirm'), [
         { text: t('cancel'), style: 'cancel' },
         {
           text: t('delete'),
@@ -58,6 +61,54 @@ export default function HistoryScreen() {
       ]);
     },
     [deleteSession, t]
+  );
+
+  const handleLongPress = useCallback(
+    (sessionId: string) => {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+
+      const options = [t('cancel'), t('save_as_template'), t('delete')];
+      const destructiveButtonIndex = 2;
+      const cancelButtonIndex = 0;
+
+      if (Platform.OS === 'ios') {
+        ActionSheetIOS.showActionSheetWithOptions(
+          {
+            options,
+            cancelButtonIndex,
+            destructiveButtonIndex,
+            title: t('app_name'),
+          },
+          (buttonIndex) => {
+            if (buttonIndex === 1) {
+              createTemplateFromSession(sessionId);
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+              Alert.alert(t('done'), t('template_created'));
+            } else if (buttonIndex === 2) {
+              confirmDelete(sessionId);
+            }
+          }
+        );
+      } else {
+        Alert.alert(t('app_name'), '', [
+          { text: t('cancel'), style: 'cancel' },
+          {
+            text: t('save_as_template'),
+            onPress: () => {
+              createTemplateFromSession(sessionId);
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+              Alert.alert(t('done'), t('template_created'));
+            },
+          },
+          {
+            text: t('delete'),
+            style: 'destructive',
+            onPress: () => confirmDelete(sessionId),
+          },
+        ]);
+      }
+    },
+    [createTemplateFromSession, t, confirmDelete]
   );
 
   return (
@@ -103,7 +154,11 @@ export default function HistoryScreen() {
                   ? { renderLeftActions: renderDeleteAction }
                   : { renderRightActions: renderDeleteAction })}
               >
-                <SessionCard session={item} onRepeat={handleRepeat} />
+                <SessionCard 
+                  session={item} 
+                  onRepeat={handleRepeat} 
+                  onLongPress={handleLongPress}
+                />
               </Swipeable>
             </Animated.View>
           );

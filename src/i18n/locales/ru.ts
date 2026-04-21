@@ -145,6 +145,8 @@ const ru: LocaleDefinition<Record<TranslationKeys, string>> = {
         minutes: 'мин',
         kg_lifted: 'КГ ПОДНЯТО',
         no_history: 'История пуста. Начните заниматься!',
+        save_as_template: 'Сохранить как программу',
+        template_created: 'Программа создана!',
 
         // Settings
         settings_title: 'Настройки',

@@ -43,6 +43,8 @@ const he: LocaleDefinition<Record<TranslationKeys, string>> = {
         delete_template_confirm: 'למחוק תבנית זו?',
         delete_session_confirm: 'למחוק אימון זה מההיסטוריה?',
         no_templates: 'אין אימונים עדיין. צור אחד!',
+        save_as_template: 'שמור כתבנית',
+        template_created: 'התבנית נוצרה!',
 
         // Exercise Library
         library_title: 'ספרייה',

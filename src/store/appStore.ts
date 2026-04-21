@@ -62,6 +62,7 @@ interface AppState {
   toggleSetComplete: (exerciseIndex: number, setIndex: number) => void;
   finishWorkout: () => void;
   discardWorkout: () => void;
+  createTemplateFromSession: (sessionId: string) => void;
 
   // History helpers
   getLastSessionForExercise: (exerciseId: string) => SetRecord[] | null;
@@ -395,10 +396,17 @@ export const useAppStore = create<AppState>((set, get) => ({
   removeSet: (exerciseIndex, setIndex) => {
     const aw = get().activeWorkout;
     if (!aw || (aw.mode !== 'draft' && aw.mode !== 'inProgress')) return;
-    const exercises = [...aw.exercises];
+    let exercises = [...aw.exercises];
     const exercise = { ...exercises[exerciseIndex] };
     exercise.sets = exercise.sets.filter((_, i) => i !== setIndex);
-    exercises[exerciseIndex] = exercise;
+    
+    if (exercise.sets.length === 0) {
+      // Remove the entire exercise if no sets are left
+      exercises = exercises.filter((_, i) => i !== exerciseIndex);
+    } else {
+      exercises[exerciseIndex] = exercise;
+    }
+    
     const updated = { ...aw, exercises };
     set({ activeWorkout: updated });
     setJSON(KEYS.activeWorkout, updated);
@@ -474,6 +482,31 @@ export const useAppStore = create<AppState>((set, get) => ({
   discardWorkout: () => {
     set({ activeWorkout: null });
     setJSON(KEYS.activeWorkout, null);
+  },
+
+  createTemplateFromSession: (sessionId) => {
+    const session = get().sessions.find((s) => s.id === sessionId);
+    if (!session) return;
+
+    const template: WorkoutTemplate = {
+      id: `tpl_${uuid()}`,
+      name: session.name,
+      exercises: session.exercises.map((ex) => {
+        const lastSet = ex.sets[ex.sets.length - 1];
+        return {
+          exerciseId: ex.exerciseId,
+          sets: ex.sets.length,
+          reps: lastSet?.reps ?? 10,
+          weight: lastSet?.weight ?? null,
+        };
+      }),
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    };
+
+    const templates = [template, ...get().templates];
+    set({ templates });
+    setJSON(KEYS.templates, templates);
   },
 
   getLastSessionForExercise: (exerciseId) => {
