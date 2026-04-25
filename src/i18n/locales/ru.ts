@@ -47,8 +47,9 @@ const ru: LocaleDefinition<Record<TranslationKeys, string>> = {
         // Exercise Library
         library_title: 'Библиотека',
         library_search: 'Поиск упражнений...',
-        add_custom_exercise: 'Добавить упражнение',
-        custom_exercise: 'Свое упражнение',
+        add_custom_exercise: 'Добавить своё упражнение',
+        edit_exercise: 'Редактировать упражнение',
+        custom_exercise: 'Своё упражнение',
         exercise_name: 'Название упражнения',
         delete_exercise_confirm: 'Удалить это упражнение?',
         body_part: 'Часть тела',

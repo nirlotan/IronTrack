@@ -20,8 +20,11 @@ import { useTranslation } from '../src/i18n';
 import { useAppStore } from '../src/store/appStore';
 import { getExerciseName } from '../src/utils/helpers';
 import { SearchBox } from '../src/components/SearchBox';
+import { ExerciseRow } from '../src/components/ExerciseRow';
 import { bodyPartKeys, bodyPartNameKeys } from '../src/data/exercises';
-import type { BodyPart } from '../src/types';
+import type { BodyPart, Exercise } from '../src/types';
+import { useCallback } from 'react';
+import { Alert } from 'react-native';
 
 export default function SelectExerciseScreen() {
   const { colors } = useTheme();
@@ -33,11 +36,16 @@ export default function SelectExerciseScreen() {
   const exercises = useAppStore((s) => s.exercises);
   const addExerciseToWorkout = useAppStore((s) => s.addExerciseToWorkout);
   const addCustomExercise = useAppStore((s) => s.addCustomExercise);
+  const updateCustomExercise = useAppStore((s) => s.updateCustomExercise);
+  const deleteCustomExercise = useAppStore((s) => s.deleteCustomExercise);
+  const selectedBodyPart = useAppStore((s) => s.lastSelectedBodyPart);
+  const setSelectedBodyPart = useAppStore((s) => s.setLastSelectedBodyPart);
 
   const [search, setSearch] = useState('');
   const [showCustomModal, setShowCustomModal] = useState(false);
   const [customName, setCustomName] = useState('');
   const [customBodyPart, setCustomBodyPart] = useState<BodyPart>('chest');
+  const [editingExerciseId, setEditingExerciseId] = useState<string | null>(null);
   const [keyboardInset, setKeyboardInset] = useState(0);
   const customNameRef = useRef<TextInput>(null);
 
@@ -77,11 +85,17 @@ export default function SelectExerciseScreen() {
     };
   }, [showCustomModal, insets.bottom]);
 
-  const filteredBySearch = exercises.filter((ex) =>
+  const filteredByBodyPart = selectedBodyPart === 'all' 
+    ? exercises 
+    : exercises.filter(ex => ex.bodyPart === selectedBodyPart);
+
+  const filteredBySearch = filteredByBodyPart.filter((ex) =>
     getExerciseName(ex, t, language).toLowerCase().includes(search.toLowerCase())
   );
 
-  const grouped = bodyPartKeys
+  const bodyPartsToShow = selectedBodyPart === 'all' ? bodyPartKeys : [selectedBodyPart];
+
+  const grouped = bodyPartsToShow
     .map((bp) => ({
       bodyPart: bp,
       label: t(bodyPartNameKeys[bp] as any),
@@ -94,12 +108,50 @@ export default function SelectExerciseScreen() {
     router.back();
   };
 
-  const handleAddCustom = () => {
+  const handleSaveCustom = () => {
     if (!customName.trim()) return;
-    addCustomExercise(customName.trim(), customBodyPart, language);
+    if (editingExerciseId) {
+      updateCustomExercise(editingExerciseId, customName.trim(), language);
+    } else {
+      const newId = addCustomExercise(customName.trim(), customBodyPart, language);
+      addExerciseToWorkout(newId);
+    }
     setCustomName('');
+    setEditingExerciseId(null);
     setShowCustomModal(false);
-    // The new exercise is now in store; user can select it
+    if (!editingExerciseId) {
+      router.back();
+    }
+  };
+
+  const handleDeleteExercise = useCallback(
+    (exercise: Exercise) => {
+      Alert.alert(t('delete'), t('delete_exercise_confirm'), [
+        { text: t('cancel'), style: 'cancel' },
+        {
+          text: t('delete'),
+          style: 'destructive',
+          onPress: () => deleteCustomExercise(exercise.id),
+        },
+      ]);
+    },
+    [deleteCustomExercise, t]
+  );
+
+  const handleEditExercise = useCallback(
+    (exercise: Exercise) => {
+      setCustomName(getExerciseName(exercise, t, language));
+      setCustomBodyPart(exercise.bodyPart);
+      setEditingExerciseId(exercise.id);
+      setShowCustomModal(true);
+    },
+    [t, language]
+  );
+
+  const handleCloseModal = () => {
+    setShowCustomModal(false);
+    setCustomName('');
+    setEditingExerciseId(null);
   };
 
   return (
@@ -113,6 +165,41 @@ export default function SelectExerciseScreen() {
         </Text>
       </View>
 
+      {/* Muscle Filter */}
+      <View style={styles.filterWrapper}>
+        <ScrollView 
+          horizontal 
+          showsHorizontalScrollIndicator={false} 
+          contentContainerStyle={[styles.filterScroll, { paddingHorizontal: 24, flexDirection: isRTL ? 'row-reverse' : 'row' }]}
+        >
+          <TouchableOpacity
+            style={[
+              styles.filterChip,
+              { backgroundColor: selectedBodyPart === 'all' ? colors.primary : colors.surfaceContainerHighest }
+            ]}
+            onPress={() => setSelectedBodyPart('all')}
+          >
+            <Text style={[styles.filterChipText, { color: selectedBodyPart === 'all' ? colors.onPrimary : colors.onSurface }]}>
+              {t('all' as any)}
+            </Text>
+          </TouchableOpacity>
+          {bodyPartKeys.map((bp) => (
+            <TouchableOpacity
+              key={bp}
+              style={[
+                styles.filterChip,
+                { backgroundColor: selectedBodyPart === bp ? colors.primary : colors.surfaceContainerHighest }
+              ]}
+              onPress={() => setSelectedBodyPart(bp)}
+            >
+              <Text style={[styles.filterChipText, { color: selectedBodyPart === bp ? colors.onPrimary : colors.onSurface }]}>
+                {t(bodyPartNameKeys[bp] as any)}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+      </View>
+
       <ScrollView
         style={{ flex: 1 }}
         contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 40 }}
@@ -122,7 +209,7 @@ export default function SelectExerciseScreen() {
         nestedScrollEnabled={true}
       >
         {/* Search */}
-        <View style={[styles.searchBox, { backgroundColor: colors.surfaceContainerLow }]}>
+        <View style={[styles.searchBox, { backgroundColor: colors.surfaceContainerLow, marginTop: 16 }]}>
           <TextInput
             style={[styles.searchInput, { color: colors.onSurface, textAlign: isRTL ? 'right' : 'left' }]}
             placeholder={t('library_search')}
@@ -135,7 +222,12 @@ export default function SelectExerciseScreen() {
         {/* Custom Exercise — first option */}
         <TouchableOpacity
           style={[styles.customBtn, { backgroundColor: colors.surfaceContainerHighest }]}
-          onPress={() => setShowCustomModal(true)}
+          onPress={() => {
+            if (selectedBodyPart !== 'all') {
+              setCustomBodyPart(selectedBodyPart);
+            }
+            setShowCustomModal(true);
+          }}
           activeOpacity={0.8}
         >
           <Text style={[styles.customBtnText, { color: colors.primary }]}>
@@ -150,15 +242,13 @@ export default function SelectExerciseScreen() {
               {group.label}
             </Text>
             {group.items.map((exercise) => (
-              <TouchableOpacity
+              <ExerciseRow
                 key={exercise.id}
-                style={[styles.exerciseItem, { backgroundColor: colors.surfaceContainerLow }]}
-                onPress={() => handleSelect(exercise.id)}
-              >
-                <Text style={[styles.exerciseName, { color: colors.onSurface, textAlign: isRTL ? 'right' : 'left' }]}>
-                  {getExerciseName(exercise, t, language)}
-                </Text>
-              </TouchableOpacity>
+                exercise={exercise}
+                onPress={handleSelect}
+                onDelete={handleDeleteExercise}
+                onEdit={handleEditExercise}
+              />
             ))}
           </View>
         ))}
@@ -171,18 +261,12 @@ export default function SelectExerciseScreen() {
         animationType="fade"
         presentationStyle="overFullScreen"
         statusBarTranslucent
-        onRequestClose={() => {
-          Keyboard.dismiss();
-          setShowCustomModal(false);
-        }}
+        onRequestClose={handleCloseModal}
       >
         <View style={styles.modalOverlay}>
           <Pressable
             style={StyleSheet.absoluteFill}
-            onPress={() => {
-              Keyboard.dismiss();
-              setShowCustomModal(false);
-            }}
+            onPress={handleCloseModal}
           />
           <Animated.View
             entering={SlideInDown}
@@ -211,7 +295,7 @@ export default function SelectExerciseScreen() {
                 ]}
               >
                 <Text style={[styles.modalTitle, { color: colors.onSurface, textAlign: isRTL ? 'right' : 'left' }]}>
-                  {t('add_custom_exercise')}
+                  {editingExerciseId ? t('edit_exercise' as any) : t('add_custom_exercise')}
                 </Text>
                 <TextInput
                   style={[styles.modalInput, { backgroundColor: colors.surfaceContainerLow, color: colors.onSurface }]}
@@ -222,45 +306,49 @@ export default function SelectExerciseScreen() {
                   textAlign={isRTL ? 'right' : 'left'}
                   ref={customNameRef}
                   returnKeyType="done"
-                  onSubmitEditing={handleAddCustom}
+                  onSubmitEditing={handleSaveCustom}
                 />
-                <Text style={[styles.modalLabel, { color: colors.onSurfaceVariant, textAlign: isRTL ? 'right' : 'left' }]}>
-                  {t('body_part')}
-                </Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipRow}>
-                  {bodyPartKeys.map((bp) => (
-                    <TouchableOpacity
-                      key={bp}
-                      style={[
-                        styles.chip,
-                        {
-                          backgroundColor:
-                            customBodyPart === bp ? colors.primaryContainer : colors.surfaceContainerHighest,
-                        },
-                      ]}
-                      onPress={() => setCustomBodyPart(bp)}
-                    >
-                      <Text
-                        style={[
-                          styles.chipText,
-                          { color: customBodyPart === bp ? colors.onPrimaryContainer : colors.onSurface },
-                        ]}
-                      >
-                        {t(bodyPartNameKeys[bp] as any)}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </ScrollView>
+                {!editingExerciseId && (
+                  <>
+                    <Text style={[styles.modalLabel, { color: colors.onSurfaceVariant, textAlign: isRTL ? 'right' : 'left' }]}>
+                      {t('body_part')}
+                    </Text>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipRow}>
+                      {bodyPartKeys.map((bp) => (
+                        <TouchableOpacity
+                          key={bp}
+                          style={[
+                            styles.chip,
+                            {
+                              backgroundColor:
+                                customBodyPart === bp ? colors.primaryContainer : colors.surfaceContainerHighest,
+                            },
+                          ]}
+                          onPress={() => setCustomBodyPart(bp)}
+                        >
+                          <Text
+                            style={[
+                              styles.chipText,
+                              { color: customBodyPart === bp ? colors.onPrimaryContainer : colors.onSurface },
+                            ]}
+                          >
+                            {t(bodyPartNameKeys[bp] as any)}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </ScrollView>
+                  </>
+                )}
                 <View style={styles.modalActions}>
                   <TouchableOpacity
                     style={[styles.modalBtn, { backgroundColor: colors.surfaceContainerHighest }]}
-                    onPress={() => setShowCustomModal(false)}
+                    onPress={handleCloseModal}
                   >
                     <Text style={[styles.modalBtnText, { color: colors.onSurface }]}>{t('cancel')}</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={[styles.modalBtn, { backgroundColor: colors.primaryContainer }]}
-                    onPress={handleAddCustom}
+                    onPress={handleSaveCustom}
                   >
                     <Text style={[styles.modalBtnText, { color: colors.onPrimaryContainer }]}>{t('save')}</Text>
                   </TouchableOpacity>
@@ -283,6 +371,22 @@ const styles = StyleSheet.create({
     fontSize: 24,
     textTransform: 'uppercase',
     letterSpacing: -0.5,
+  },
+  filterWrapper: {
+    paddingVertical: 8,
+  },
+  filterScroll: {
+    gap: 8,
+  },
+  filterChip: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 20,
+  },
+  filterChipText: {
+    fontFamily: 'SpaceGrotesk_700Bold',
+    fontSize: 12,
+    textTransform: 'uppercase',
   },
   searchBox: {
     borderRadius: 12,
@@ -312,15 +416,6 @@ const styles = StyleSheet.create({
     fontSize: 20,
     letterSpacing: -0.5,
     marginBottom: 8,
-  },
-  exerciseItem: {
-    padding: 18,
-    borderRadius: 12,
-    marginBottom: 6,
-  },
-  exerciseName: {
-    fontFamily: 'SpaceGrotesk_700Bold',
-    fontSize: 16,
   },
   modalOverlay: {
     flex: 1,

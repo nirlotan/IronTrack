@@ -30,6 +30,7 @@ interface AppState {
   templates: WorkoutTemplate[];
   sessions: WorkoutSession[];
   activeWorkout: ActiveWorkout | null;
+  lastSelectedBodyPart: BodyPart | 'all';
 
   // Actions
   setLanguage: (lang: LocaleCode) => void;
@@ -38,9 +39,11 @@ interface AppState {
   setRestTimerSeconds: (s: number) => void;
   setAutoStartRestTimer: (enabled: boolean) => void;
   setWeeklyGoal: (goal: number) => void;
+  setLastSelectedBodyPart: (bodyPart: BodyPart | 'all') => void;
 
   // Exercises
-  addCustomExercise: (name: string, bodyPart: BodyPart, language: string) => void;
+  addCustomExercise: (name: string, bodyPart: BodyPart, language: string) => string;
+  updateCustomExercise: (exerciseId: string, name: string, language: string) => void;
   deleteCustomExercise: (exerciseId: string) => void;
 
   // Templates
@@ -58,7 +61,7 @@ interface AppState {
   addExerciseToWorkout: (exerciseId: string) => void;
   addSetToExercise: (exerciseIndex: number) => void;
   removeSet: (exerciseIndex: number, setIndex: number) => void;
-  updateSet: (exerciseIndex: number, setIndex: number, field: 'weight' | 'reps', value: number | null) => void;
+  updateSet: (exerciseIndex: number, setIndex: number, field: 'weight' | 'reps', value: number | string | null) => void;
   toggleSetComplete: (exerciseIndex: number, setIndex: number) => void;
   finishWorkout: () => void;
   discardWorkout: () => void;
@@ -93,16 +96,29 @@ function normalizeTemplate(template: WorkoutTemplate & { exercises: any[] }): Wo
     exercises: template.exercises.map((exercise: any) => ({
       exerciseId: exercise.exerciseId,
       sets: exercise.sets ?? exercise.targetSets ?? 3,
-      reps: exercise.reps ?? exercise.targetReps ?? exercise.lastReps ?? 10,
+      reps: (exercise.reps ?? exercise.targetReps ?? exercise.lastReps ?? 10).toString(),
       weight:
         exercise.weight != null
-          ? exercise.weight
+          ? exercise.weight.toString()
           : exercise.lastWeight != null
-            ? exercise.lastWeight
+            ? exercise.lastWeight.toString()
             : null,
     })),
   };
 }
+
+const parseReps = (reps: string | number | null): number => {
+  if (reps == null) return 0;
+  const s = reps.toString();
+  if (s.includes('-')) {
+    const parts = s.split('-').map((p) => parseFloat(p.trim()));
+    if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
+      return (parts[0] + parts[1]) / 2;
+    }
+  }
+  const val = parseFloat(s);
+  return isNaN(val) ? 0 : val;
+};
 
 export const useAppStore = create<AppState>((set, get) => ({
   language: 'he',
@@ -115,6 +131,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   templates: [],
   sessions: [],
   activeWorkout: null,
+  lastSelectedBodyPart: 'all',
 
   setLanguage: (lang) => {
     set({ language: lang });
@@ -147,6 +164,10 @@ export const useAppStore = create<AppState>((set, get) => ({
     setJSON(KEYS.weeklyGoal, safeGoal);
   },
 
+  setLastSelectedBodyPart: (bodyPart) => {
+    set({ lastSelectedBodyPart: bodyPart });
+  },
+
   addCustomExercise: (name, bodyPart, language) => {
     const id = `custom_${uuid()}`;
     const exercise: Exercise = {
@@ -157,6 +178,31 @@ export const useAppStore = create<AppState>((set, get) => ({
       customNames: { [language]: name },
     };
     const exercises = [...get().exercises, exercise];
+    set({ exercises });
+    setJSON(KEYS.exercises, exercises.filter((e) => e.isCustom));
+    return id;
+  },
+
+  updateCustomExercise: (exerciseId, name, language) => {
+    const exercises = get().exercises.map((ex) => {
+      if (ex.id === exerciseId) {
+        return {
+          ...ex,
+          customNames: {
+            ...(ex.customNames || {}),
+            [language]: name,
+          },
+        };
+      }
+      return ex;
+    });
+
+    const activeWorkout = get().activeWorkout;
+    // We don't strictly NEED to update activeWorkout state here because getExerciseName
+    // pulls from the exercises array anyway, but let's keep it consistent if there's any local caching.
+    // Actually, ActiveWorkout doesn't store the name, it stores exerciseId. 
+    // So updating the exercises array is enough.
+
     set({ exercises });
     setJSON(KEYS.exercises, exercises.filter((e) => e.isCustom));
   },
@@ -290,8 +336,8 @@ export const useAppStore = create<AppState>((set, get) => ({
         return {
           exerciseId: ex.exerciseId,
           sets: ex.sets.length,
-          reps: lastSet?.reps ?? 10,
-          weight: lastSet?.weight ?? null,
+          reps: (lastSet?.reps ?? '10').toString(),
+          weight: lastSet?.weight?.toString() ?? null,
         };
       }),
       createdAt: existing?.createdAt ?? now,
@@ -451,7 +497,10 @@ export const useAppStore = create<AppState>((set, get) => ({
     for (const ex of aw.exercises) {
       for (const s of ex.sets) {
         if (s.isCompleted && s.weight && s.reps) {
-          totalVolume += s.weight * s.reps;
+          const w = parseFloat(s.weight);
+          if (!isNaN(w)) {
+            totalVolume += w * parseReps(s.reps);
+          }
         }
       }
     }
@@ -496,8 +545,8 @@ export const useAppStore = create<AppState>((set, get) => ({
         return {
           exerciseId: ex.exerciseId,
           sets: ex.sets.length,
-          reps: lastSet?.reps ?? 10,
-          weight: lastSet?.weight ?? null,
+          reps: (lastSet?.reps ?? '10').toString(),
+          weight: lastSet?.weight?.toString() ?? null,
         };
       }),
       createdAt: Date.now(),

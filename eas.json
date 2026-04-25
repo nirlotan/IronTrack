@@ -16,6 +16,11 @@
     }
   },
   "submit": {
-    "production": {}
+    "production": {
+      "ios": {
+        "appleId": "nir.lotan@gmail.com",
+        "ascAppId": "6479633633"
+      }
+    }
   }
 }

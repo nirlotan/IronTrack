@@ -50,6 +50,7 @@ const he: LocaleDefinition<Record<TranslationKeys, string>> = {
         library_title: 'ספרייה',
         library_search: 'חפש תרגיל...',
         add_custom_exercise: 'הוסף תרגיל מותאם אישית',
+        edit_exercise: 'ערוך תרגיל',
         custom_exercise: 'תרגיל מותאם אישית',
         exercise_name: 'שם תרגיל',
         delete_exercise_confirm: 'למחוק את התרגיל הזה?',

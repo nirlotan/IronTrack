@@ -49,6 +49,7 @@ const en = {
         library_title: 'Library',
         library_search: 'Search exercises...',
         add_custom_exercise: 'Add Custom Exercise',
+        edit_exercise: 'Edit Exercise',
         custom_exercise: 'Custom Exercise',
         exercise_name: 'Exercise Name',
         delete_exercise_confirm: 'Delete this exercise?',

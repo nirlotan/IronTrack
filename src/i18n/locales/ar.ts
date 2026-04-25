@@ -48,6 +48,7 @@ const ar: LocaleDefinition<Record<TranslationKeys, string>> = {
         library_title: 'المكتبة',
         library_search: 'بحث عن تمرين...',
         add_custom_exercise: 'إضافة تمرين مخصص',
+        edit_exercise: 'تعديل التمرين',
         custom_exercise: 'تمرين مخصص',
         exercise_name: 'اسم التمرين',
         delete_exercise_confirm: 'هل تريد حذف هذا التمرين؟',

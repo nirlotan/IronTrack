@@ -48,6 +48,7 @@ const pl: LocaleDefinition<Record<TranslationKeys, string>> = {
         library_title: 'Biblioteka',
         library_search: 'Szukaj ćwiczeń...',
         add_custom_exercise: 'Dodaj własne ćwiczenie',
+        edit_exercise: 'Edytuj ćwiczenie',
         custom_exercise: 'Własne ćwiczenie',
         exercise_name: 'Nazwa ćwiczenia',
         delete_exercise_confirm: 'Usunąć to ćwiczenie?',

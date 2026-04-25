@@ -9,7 +9,10 @@ import {
   Alert,
   Platform,
   useWindowDimensions,
+  Modal,
+  Pressable,
 } from 'react-native';
+import Animated, { SlideInDown, SlideOutUp } from 'react-native-reanimated';
 import { Swipeable } from 'react-native-gesture-handler';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -46,6 +49,7 @@ export default function WorkoutScreen() {
   const finishWorkout = useAppStore((s) => s.finishWorkout);
   const discardWorkout = useAppStore((s) => s.discardWorkout);
   const getLastSessionForExercise = useAppStore((s) => s.getLastSessionForExercise);
+  const updateCustomExercise = useAppStore((s) => s.updateCustomExercise);
 
   // Rest timer
   const [restTimeLeft, setRestTimeLeft] = useState(0);
@@ -54,6 +58,11 @@ export default function WorkoutScreen() {
 
   // Workout elapsed timer
   const [elapsed, setElapsed] = useState(0);
+
+  // Renaming
+  const [editingExercise, setEditingExercise] = useState<Exercise | null>(null);
+  const [newExerciseName, setNewExerciseName] = useState('');
+  const lastTitleTapRef = useRef<{ id: string; time: number } | null>(null);
 
   useEffect(() => {
     if (!activeWorkout || activeWorkout.mode !== 'inProgress' || !activeWorkout.startedAt) {
@@ -187,6 +196,27 @@ export default function WorkoutScreen() {
   const handleNewWorkout = useCallback(() => {
     startEmptyWorkout();
   }, [startEmptyWorkout]);
+
+  const handleTitlePress = (exercise: Exercise) => {
+    if (!exercise.isCustom) return;
+    const now = Date.now();
+    if (lastTitleTapRef.current?.id === exercise.id && (now - lastTitleTapRef.current.time) < 300) {
+      // Double tap
+      setEditingExercise(exercise);
+      setNewExerciseName(getExerciseName(exercise, t, language));
+      lastTitleTapRef.current = null;
+    } else {
+      lastTitleTapRef.current = { id: exercise.id, time: now };
+    }
+  };
+
+  const handleRenameExercise = () => {
+    if (editingExercise && newExerciseName.trim()) {
+      updateCustomExercise(editingExercise.id, newExerciseName.trim(), language);
+      setEditingExercise(null);
+      setNewExerciseName('');
+    }
+  };
 
   const getExerciseInfo = useCallback(
     (exerciseId: string) => exercises.find((e) => e.id === exerciseId),
@@ -406,14 +436,16 @@ export default function WorkoutScreen() {
                 >
                   {t('current_exercise')}
                 </Text>
-                <Text
-                  style={[
-                    styles.exerciseName,
-                    { color: colors.onSurface, textAlign: isRTL ? 'right' : 'left', fontFamily: fontBold },
-                  ]}
-                >
-                  {getExerciseName(exerciseInfo, t, language)}
-                </Text>
+                <TouchableOpacity activeOpacity={0.8} onPress={() => handleTitlePress(exerciseInfo)}>
+                  <Text
+                    style={[
+                      styles.exerciseName,
+                      { color: colors.onSurface, textAlign: isRTL ? 'right' : 'left', fontFamily: fontBold },
+                    ]}
+                  >
+                    {getExerciseName(exerciseInfo, t, language)}
+                  </Text>
+                </TouchableOpacity>
               </View>
 
               {workoutEx.sets.map((set, setIdx) => {
@@ -512,11 +544,11 @@ export default function WorkoutScreen() {
                               ]}
                               value={set.weight?.toString() ?? ''}
                               onChangeText={(v) =>
-                                updateSet(exIdx, setIdx, 'weight', v ? parseFloat(v) : null)
+                                updateSet(exIdx, setIdx, 'weight', v || null)
                               }
                               placeholder={lastSet?.weight?.toString() ?? '--'}
                               placeholderTextColor={colors.outlineVariant}
-                              keyboardType="numeric"
+                              keyboardType="decimal-pad"
                               editable={canEditSetValues}
                               returnKeyType="next"
                               accessibilityLabel={`${t('weight_kg')} ${t('set_num')} ${setIdx + 1}`}
@@ -535,7 +567,7 @@ export default function WorkoutScreen() {
                                 ]}
                                 onPress={() =>
                                   canEditSetValues &&
-                                  updateSet(exIdx, setIdx, 'weight', (set.weight ?? 0) + 2.5)
+                                  updateSet(exIdx, setIdx, 'weight', (parseFloat(set.weight ?? '0') + 2.5).toString())
                                 }
                                 disabled={!canEditSetValues}
                                 accessibilityRole="button"
@@ -564,7 +596,7 @@ export default function WorkoutScreen() {
                                     exIdx,
                                     setIdx,
                                     'weight',
-                                    Math.max(0, (set.weight ?? 0) - 2.5)
+                                    Math.max(0, parseFloat(set.weight ?? '0') - 2.5).toString()
                                   )
                                 }
                                 disabled={!canEditSetValues}
@@ -626,7 +658,7 @@ export default function WorkoutScreen() {
                               ]}
                               value={set.reps?.toString() ?? ''}
                               onChangeText={(v) =>
-                                updateSet(exIdx, setIdx, 'reps', v ? parseInt(v, 10) : null)
+                                updateSet(exIdx, setIdx, 'reps', v || null)
                               }
                               placeholder={lastSet?.reps?.toString() ?? '--'}
                               placeholderTextColor={colors.outlineVariant}
@@ -649,7 +681,7 @@ export default function WorkoutScreen() {
                                 ]}
                                 onPress={() =>
                                   canEditSetValues &&
-                                  updateSet(exIdx, setIdx, 'reps', (set.reps ?? 0) + 1)
+                                  updateSet(exIdx, setIdx, 'reps', (parseInt(set.reps?.toString() ?? '0', 10) + 1).toString())
                                 }
                                 disabled={!canEditSetValues}
                                 accessibilityRole="button"
@@ -678,7 +710,7 @@ export default function WorkoutScreen() {
                                     exIdx,
                                     setIdx,
                                     'reps',
-                                    Math.max(0, (set.reps ?? 0) - 1)
+                                    Math.max(0, parseInt(set.reps?.toString() ?? '0', 10) - 1).toString()
                                   )
                                 }
                                 disabled={!canEditSetValues}
@@ -767,6 +799,72 @@ export default function WorkoutScreen() {
           </TouchableOpacity>
         )}
       </ScrollView>
+
+      {/* Renaming Modal */}
+      <Modal
+        visible={!!editingExercise}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setEditingExercise(null)}
+      >
+        <Pressable style={styles.modalOverlay} onPress={() => setEditingExercise(null)}>
+          <Animated.View
+            entering={SlideInDown}
+            exiting={SlideOutUp}
+            style={[
+              styles.modalContent,
+              {
+                backgroundColor: colors.surfaceContainer,
+                paddingTop: insets.top + 24
+              }
+            ]}
+          >
+            <Pressable onPress={() => { }}>
+              <Text
+                style={[
+                  styles.modalTitle,
+                  { color: colors.onSurface, textAlign: isRTL ? 'right' : 'left', fontFamily: fontBold },
+                ]}
+              >
+                {t('edit_exercise' as any)}
+              </Text>
+
+              <TextInput
+                style={[
+                  styles.modalInput,
+                  { backgroundColor: colors.surfaceContainerLow, color: colors.onSurface, textAlign: isRTL ? 'right' : 'left' },
+                ]}
+                placeholder={t('exercise_name')}
+                placeholderTextColor={colors.outlineVariant}
+                value={newExerciseName}
+                onChangeText={setNewExerciseName}
+                autoFocus
+                returnKeyType="done"
+                onSubmitEditing={handleRenameExercise}
+              />
+
+              <View style={styles.modalActions}>
+                <TouchableOpacity
+                  style={[styles.modalBtn, { backgroundColor: colors.surfaceContainerHighest }]}
+                  onPress={() => setEditingExercise(null)}
+                >
+                  <Text style={[styles.modalBtnText, { color: colors.onSurface, fontFamily: fontBold }]}>
+                    {t('cancel')}
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.modalBtn, { backgroundColor: colors.primaryContainer }]}
+                  onPress={handleRenameExercise}
+                >
+                  <Text style={[styles.modalBtnText, { color: colors.onPrimaryContainer, fontFamily: fontBold }]}>
+                    {t('save')}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </Pressable>
+          </Animated.View>
+        </Pressable>
+      </Modal>
     </ScreenBackground>
   );
 }
@@ -975,5 +1073,44 @@ const styles = StyleSheet.create({
     fontSize: 13,
     textTransform: 'uppercase',
     letterSpacing: 1,
+  },
+  modalOverlay: {
+    flex: 1,
+    justifyContent: 'flex-start',
+    backgroundColor: 'rgba(0,0,0,0.6)',
+  },
+  modalContent: {
+    borderBottomLeftRadius: 20,
+    borderBottomRightRadius: 20,
+    padding: 24,
+    paddingBottom: 40,
+  },
+  modalTitle: {
+    fontSize: 20,
+    textTransform: 'uppercase',
+    letterSpacing: -0.5,
+    marginBottom: 20,
+  },
+  modalInput: {
+    borderRadius: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    fontSize: 16,
+    marginBottom: 20,
+  },
+  modalActions: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  modalBtn: {
+    flex: 1,
+    borderRadius: 8,
+    paddingVertical: 16,
+    alignItems: 'center',
+  },
+  modalBtnText: {
+    fontSize: 14,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
 });

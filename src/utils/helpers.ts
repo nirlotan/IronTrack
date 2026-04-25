@@ -3,13 +3,13 @@ import type { TranslationKeys } from '../i18n';
 
 export function getExerciseName(
   exercise: Exercise,
-  t: (key: TranslationKeys) => string,
+  t: (key: any) => string,
   language: string
 ): string {
   if (exercise.isCustom) {
     return exercise.customNames?.[language] ?? exercise.customNames?.en ?? 'Custom Exercise';
   }
-  return t(exercise.nameKey as TranslationKeys);
+  return t(exercise.nameKey as any);
 }
 
 export function formatDuration(minutes: number): string {

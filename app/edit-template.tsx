@@ -37,19 +37,23 @@ export default function EditTemplateScreen() {
   const handleAddExercise = (exerciseId: string) => {
     setSelectedExercises((prev) => [
       ...prev,
-      { exerciseId, sets: 3, reps: 10, weight: null },
+      { exerciseId, sets: 3, reps: '10', weight: null },
     ]);
     setShowExercisePicker(false);
   };
 
   const handleUpdateExercise = (index: number, field: 'sets' | 'reps' | 'weight', value: string) => {
-    const num = parseInt(value, 10);
     setSelectedExercises((prev) => {
       const updated = [...prev];
-      updated[index] = {
-        ...updated[index],
-        [field]: isNaN(num) ? (field === 'weight' ? null : updated[index][field]) : num,
-      };
+      if (field === 'reps' || field === 'weight') {
+        updated[index] = { ...updated[index], [field]: value || null };
+      } else {
+        const num = parseInt(value, 10);
+        updated[index] = {
+          ...updated[index],
+          [field]: isNaN(num) ? updated[index][field] : num,
+        };
+      }
       return updated;
     });
   };
@@ -172,7 +176,7 @@ export default function EditTemplateScreen() {
                     style={[styles.templateExInput, { backgroundColor: colors.surfaceContainer, color: colors.onSurface }]}
                     value={te.reps.toString()}
                     onChangeText={(v) => handleUpdateExercise(idx, 'reps', v)}
-                    keyboardType="numeric"
+                    keyboardType="default"
                     textAlign="center"
                   />
                 </View>
@@ -184,7 +188,7 @@ export default function EditTemplateScreen() {
                     style={[styles.templateExInput, { backgroundColor: colors.surfaceContainer, color: colors.onSurface }]}
                     value={te.weight?.toString() ?? ''}
                     onChangeText={(v) => handleUpdateExercise(idx, 'weight', v)}
-                    keyboardType="numeric"
+                    keyboardType="decimal-pad"
                     textAlign="center"
                   />
                 </View>

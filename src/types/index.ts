@@ -12,8 +12,8 @@ export interface Exercise {
 export interface TemplateExercise {
   exerciseId: string;
   sets: number;
-  reps: number;
-  weight: number | null;
+  reps: string;
+  weight: string | null;
 }
 
 export interface WorkoutTemplate {
@@ -27,8 +27,8 @@ export interface WorkoutTemplate {
 export interface SetRecord {
   id: string;
   exerciseId: string;
-  weight: number | null;
-  reps: number | null;
+  weight: string | null;
+  reps: string | null;
   isCompleted: boolean;
 }
 

@@ -46,7 +46,8 @@ const es = {
         // Exercise Library
         library_title: 'Biblioteca',
         library_search: 'Buscar ejercicios...',
-        add_custom_exercise: 'Añadir ejercicio personalizado',
+        add_custom_exercise: 'Agregar ejercicio personalizado',
+        edit_exercise: 'Editar ejercicio',
         custom_exercise: 'Ejercicio personalizado',
         exercise_name: 'Nombre del ejercicio',
         delete_exercise_confirm: '¿Eliminar este ejercicio?',
