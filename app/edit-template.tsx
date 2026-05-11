@@ -37,7 +37,7 @@ export default function EditTemplateScreen() {
   const handleAddExercise = (exerciseId: string) => {
     setSelectedExercises((prev) => [
       ...prev,
-      { exerciseId, sets: 3, reps: '10', weight: null },
+      { exerciseId, sets: 3, reps: 10, weight: null },
     ]);
     setShowExercisePicker(false);
   };
@@ -60,6 +60,16 @@ export default function EditTemplateScreen() {
 
   const handleRemoveExercise = (index: number) => {
     setSelectedExercises((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const handleMoveExercise = (from: number, to: number) => {
+    setSelectedExercises((prev) => {
+      if (to < 0 || to >= prev.length) return prev;
+      const next = [...prev];
+      const [moved] = next.splice(from, 1);
+      next.splice(to, 0, moved);
+      return next;
+    });
   };
 
   const handleSave = () => {
@@ -151,9 +161,25 @@ export default function EditTemplateScreen() {
                 <Text style={[styles.templateExName, { color: colors.onSurface, textAlign: isRTL ? 'right' : 'left' }]}>
                   {getExerciseName(ex, t, language)}
                 </Text>
-                <TouchableOpacity onPress={() => handleRemoveExercise(idx)}>
-                  <Text style={[styles.removeBtn, { color: colors.error }]}>✕</Text>
-                </TouchableOpacity>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
+                  <TouchableOpacity
+                    onPress={() => handleMoveExercise(idx, idx - 1)}
+                    disabled={idx === 0}
+                    accessibilityLabel="Move up"
+                  >
+                    <Text style={[styles.reorderBtn, { color: colors.primary, opacity: idx === 0 ? 0.25 : 1 }]}>↑</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={() => handleMoveExercise(idx, idx + 1)}
+                    disabled={idx === selectedExercises.length - 1}
+                    accessibilityLabel="Move down"
+                  >
+                    <Text style={[styles.reorderBtn, { color: colors.primary, opacity: idx === selectedExercises.length - 1 ? 0.25 : 1 }]}>↓</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={() => handleRemoveExercise(idx)}>
+                    <Text style={[styles.removeBtn, { color: colors.error }]}>✕</Text>
+                  </TouchableOpacity>
+                </View>
               </View>
               <View style={styles.templateExRow}>
                 <View style={styles.templateExField}>
@@ -250,6 +276,7 @@ const styles = StyleSheet.create({
   },
   templateExName: { fontFamily: 'SpaceGrotesk_700Bold', fontSize: 16, flex: 1 },
   removeBtn: { fontSize: 18, fontWeight: '700' },
+  reorderBtn: { fontSize: 20, fontWeight: '700' },
   templateExRow: { flexDirection: 'row', gap: 12 },
   templateExField: { flex: 1 },
   templateExLabel: {

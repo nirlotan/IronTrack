@@ -1,904 +1,441 @@
-import { useCallback, useMemo, useState } from 'react';
+/**
+ * Today — the home dashboard.
+ *
+ * Above-the-fold:
+ *   - Personalized greeting + quick "next routine" card with one-tap start
+ *   - Weekly goal ring + current streak
+ *   - PR / achievement banners (if any)
+ * Below:
+ *   - Smart suggestions (auto-progression for last lifts)
+ *   - Muscle-balance pill bars over last 14 days
+ *   - Recent sessions
+ */
+import React, { useMemo, useCallback } from 'react';
 import {
-  ActionSheetIOS,
-  Alert,
-  Platform,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-  ScrollView,
+    View,
+    Text,
+    StyleSheet,
+    ScrollView,
+    Pressable,
 } from 'react-native';
-import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
 import { useRouter } from 'expo-router';
-import { MaterialIcons } from '@expo/vector-icons';
-import Swipeable from 'react-native-gesture-handler/Swipeable';
-import { RectButton } from 'react-native-gesture-handler';
-import * as Haptics from 'expo-haptics';
-import Svg, { Circle, Line, Path, Text as SvgText } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useTheme, ScreenBackground } from '../../src/theme';
+import Animated, { FadeInDown } from 'react-native-reanimated';
+import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
+import { useTheme, ScreenBackground, tokens } from '../../src/theme';
 import { useTranslation } from '../../src/i18n';
 import { useAppStore } from '../../src/store/appStore';
-import { SearchBox } from '../../src/components/SearchBox';
-import { SessionCard } from '../../src/components/SessionCard';
-import { AnimatedPressable } from '../../src/components/AnimatedPressable';
-import { formatVolume } from '../../src/utils/helpers';
-import type { WorkoutTemplate } from '../../src/types';
+import {
+    Card,
+    ListRow,
+    PillButton,
+    ProgressRing,
+    StatTile,
+    SectionHeader,
+    LargeTitle,
+    Badge,
+} from '../../src/components/ios';
+import { computeMuscleBalance, computeStreak, suggestProgression } from '../../src/utils/algorithms';
+import { getExerciseName, formatVolume } from '../../src/utils/helpers';
+import { bodyPartKeys, bodyPartNameKeys } from '../../src/data/exercises';
+import { achievements as achievementCatalog } from '../../src/data/achievements';
 
-function toISODate(date: Date) {
-  return date.toISOString().split('T')[0];
+function greetingKey(): 'good_morning' | 'good_afternoon' | 'good_evening' {
+    const h = new Date().getHours();
+    if (h < 12) return 'good_morning';
+    if (h < 18) return 'good_afternoon';
+    return 'good_evening';
 }
 
-function fromISODate(date: string) {
-  return new Date(`${date}T00:00:00`);
+function workoutsThisWeek(sessions: ReturnType<typeof useAppStore.getState>['sessions']): number {
+    const now = new Date();
+    now.setHours(0, 0, 0, 0);
+    const monday = new Date(now);
+    monday.setDate(now.getDate() - ((now.getDay() + 6) % 7));
+    return sessions.filter((s) => new Date(`${s.date}T00:00:00`) >= monday).length;
 }
 
-function buildLast30DaysVolume(sessions: ReturnType<typeof useAppStore.getState>['sessions']) {
-  const now = new Date();
-  now.setHours(0, 0, 0, 0);
-  const start = new Date(now);
-  start.setDate(start.getDate() - 29);
+export default function TodayScreen() {
+    const { colors } = useTheme();
+    const { t, isRTL, fontBold, fontRegular } = useTranslation();
+    const insets = useSafeAreaInsets();
+    const router = useRouter();
 
-  const byDay = new Map<string, { totalVolume: number }>();
+    const sessions = useAppStore((s) => s.sessions);
+    const templates = useAppStore((s) => s.templates);
+    const exercises = useAppStore((s) => s.exercises);
+    const weeklyGoal = useAppStore((s) => s.weeklyGoal);
+    const unlockedAchievements = useAppStore((s) => s.unlockedAchievements);
+    const recentlyUnlocked = useAppStore((s) => s.recentlyUnlockedAchievements);
+    const recentPRBanner = useAppStore((s) => s.recentPRBanner);
+    const dismissPRBanner = useAppStore((s) => s.dismissPRBanner);
+    const dismissAchievementBanner = useAppStore((s) => s.dismissAchievementBanner);
+    const startEmptyWorkout = useAppStore((s) => s.startEmptyWorkout);
+    const startWorkoutFromTemplate = useAppStore((s) => s.startWorkoutFromTemplate);
+    const startWorkoutFromSession = useAppStore((s) => s.startWorkoutFromSession);
 
-  for (const session of sessions) {
-    const sessionDate = fromISODate(session.date);
-    if (sessionDate < start || sessionDate > now) {
-      continue;
-    }
+    const weekly = useMemo(() => workoutsThisWeek(sessions), [sessions]);
+    const streak = useMemo(() => computeStreak(sessions), [sessions]);
+    const muscleBalance = useMemo(
+        () => computeMuscleBalance(sessions, exercises, 14),
+        [sessions, exercises]
+    );
 
-    const sessionVolume =
-      session.totalVolume ??
-      session.exercises.reduce((sum, exercise) => {
-        for (const set of exercise.sets) {
-          if (set.isCompleted && set.weight && set.reps) {
-            sum += set.weight * set.reps;
-          }
+    /** Suggest the next routine: most recent template that hasn't been used yet this week, fallback to most recent. */
+    const nextRoutine = useMemo(() => {
+        if (templates.length === 0) return null;
+        const usedThisWeek = new Set(
+            sessions
+                .filter((s) => {
+                    const d = new Date(`${s.date}T00:00:00`);
+                    const monday = new Date();
+                    monday.setHours(0, 0, 0, 0);
+                    monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7));
+                    return d >= monday;
+                })
+                .map((s) => s.templateId)
+                .filter(Boolean)
+        );
+        return templates.find((t) => !usedThisWeek.has(t.id)) ?? templates[0];
+    }, [templates, sessions]);
+
+    /** Top 3 progression suggestions across exercises lifted in the last 30 days. */
+    const suggestions = useMemo(() => {
+        const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000;
+        const historyByExercise = new Map<
+            string,
+            Array<{ weight: number | null; reps: number | null; rpe?: number; date: string }>
+        >();
+
+        for (const s of sessions) {
+            const t = new Date(`${s.date}T00:00:00`).getTime();
+            if (t < cutoff) continue;
+            for (const ex of s.exercises) {
+                for (const set of ex.sets) {
+                    if (!set.isCompleted || !set.weight || !set.reps) continue;
+                    if (set.setType === 'warmup') continue;
+                    const list = historyByExercise.get(ex.exerciseId) ?? [];
+                    list.push({ weight: set.weight, reps: set.reps, rpe: set.rpe, date: s.date });
+                    historyByExercise.set(ex.exerciseId, list);
+                }
+            }
         }
-        return sum;
-      }, 0);
 
-    const current = byDay.get(session.date) ?? { totalVolume: 0 };
-    current.totalVolume += sessionVolume;
-    byDay.set(session.date, current);
-  }
+        const out: Array<{
+            exerciseId: string;
+            name: string;
+            suggestion: ReturnType<typeof suggestProgression>;
+            lastWeight: number;
+            lastReps: number;
+        }> = [];
 
-  const activeDays = Array.from(byDay.entries())
-    .sort(([left], [right]) => left.localeCompare(right))
-    .slice(-6)
-    .map(([date, stats]) => ({
-      date,
-      label: `${fromISODate(date).getMonth() + 1}/${fromISODate(date).getDate()}`,
-      value: Number(stats.totalVolume.toFixed(1)),
-    }));
+        for (const [exerciseId, hist] of historyByExercise.entries()) {
+            const exInfo = exercises.find((e) => e.id === exerciseId);
+            if (!exInfo) continue;
+            const ordered = hist.sort((a, b) => (a.date < b.date ? 1 : -1));
+            const sug = suggestProgression(ordered);
+            if (!sug) continue;
+            out.push({
+                exerciseId,
+                name: getExerciseName(exInfo, t as any, 'en'),
+                suggestion: sug,
+                lastWeight: ordered[0].weight ?? 0,
+                lastReps: ordered[0].reps ?? 0,
+            });
+        }
 
-  if (activeDays.length > 0) {
-    return activeDays;
-  }
+        return out
+            .filter((s) => s.suggestion?.reason !== 'first_time')
+            .slice(0, 3);
+    }, [sessions, exercises, t]);
 
-  const coldStartDays: Array<{ date: string; label: string; value: number }> = [];
-  for (let i = 5; i >= 0; i--) {
-    const d = new Date(now);
-    d.setDate(now.getDate() - i);
-    coldStartDays.push({
-      date: toISODate(d),
-      label: `${d.getMonth() + 1}/${d.getDate()}`,
-      value: 0,
-    });
-  }
+    const recentSessions = useMemo(
+        () => sessions.filter((s) => !s.isHiddenFromRecent).slice(0, 3),
+        [sessions]
+    );
 
-  return coldStartDays;
-}
-
-function getCompletedWorkoutsInCurrentWeek(sessions: ReturnType<typeof useAppStore.getState>['sessions']) {
-  const now = new Date();
-  now.setHours(0, 0, 0, 0);
-
-  const startOfWeek = new Date(now);
-  const mondayOffset = (now.getDay() + 6) % 7;
-  startOfWeek.setDate(now.getDate() - mondayOffset);
-
-  const endOfWeek = new Date(startOfWeek);
-  endOfWeek.setDate(startOfWeek.getDate() + 6);
-
-  return sessions.filter((session) => {
-    const sessionDate = fromISODate(session.date);
-    return sessionDate >= startOfWeek && sessionDate <= endOfWeek;
-  }).length;
-}
-
-function TemplateCard({
-  template,
-  onStart,
-  onEdit,
-  onDelete,
-}: {
-  template: WorkoutTemplate;
-  onStart: (id: string) => void;
-  onEdit: (id: string) => void;
-  onDelete: (id: string) => void;
-}) {
-  const { colors } = useTheme();
-  const { t, isRTL, fontBold, fontRegular } = useTranslation();
-
-  const totalSets = template.exercises.reduce((sum: number, item: any) => sum + item.sets, 0);
-
-  const renderDeleteAction = () => (
-    <RectButton
-      style={[styles.swipeDeleteAction, { backgroundColor: colors.error }]}
-      onPress={() => onDelete(template.id)}
-      accessibilityRole="button"
-      accessibilityLabel={t('delete')}
-    >
-      <MaterialIcons name="delete" size={18} color={colors.onError} />
-      <Text style={[styles.swipeDeleteText, { color: colors.onError, fontFamily: fontBold }]}>{t('delete')}</Text>
-    </RectButton>
-  );
-
-  return (
-    <Swipeable
-      overshootLeft={false}
-      overshootRight={false}
-      {...(isRTL
-        ? { renderLeftActions: renderDeleteAction }
-        : { renderRightActions: renderDeleteAction })}
-    >
-      <View style={[styles.templateCard, { backgroundColor: colors.surfaceContainerLow }]}>
-        <View style={[styles.templateRow, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
-          <View style={{ flex: 1 }}>
-            <Text
-              style={[
-                styles.templateTitle,
-                { color: colors.onSurface, fontFamily: fontBold, textAlign: isRTL ? 'right' : 'left' },
-              ]}
-            >
-              {template.name}
-            </Text>
-            <Text
-              style={[
-                styles.templateMeta,
-                { color: colors.onSurfaceVariant, fontFamily: fontRegular, textAlign: isRTL ? 'right' : 'left' },
-              ]}
-            >
-              {template.exercises.length} {t('template_exercises')} · {totalSets} {t('template_total_sets')}
-            </Text>
-          </View>
-          <TouchableOpacity
-            style={styles.moreBtn}
-            onPress={() => onEdit(template.id)}
-            accessibilityRole="button"
-            accessibilityLabel={t('edit')}
-          >
-            <MaterialIcons name="more-horiz" size={22} color={colors.outlineVariant} />
-          </TouchableOpacity>
-        </View>
-
-        <AnimatedPressable
-          style={[styles.startBtn, { backgroundColor: colors.primaryContainer }]}
-          onPress={() => onStart(template.id)}
-          haptic
-        >
-          <MaterialIcons name="play-arrow" size={18} color={colors.onPrimaryContainer} />
-          <Text style={[styles.startBtnText, { color: colors.onPrimaryContainer, fontFamily: fontBold }]}>
-            {t('start')}
-          </Text>
-        </AnimatedPressable>
-      </View>
-    </Swipeable>
-  );
-}
-
-export default function HomeScreen() {
-  const { colors } = useTheme();
-  const { t, isRTL, fontBold, fontRegular } = useTranslation();
-  const insets = useSafeAreaInsets();
-  const router = useRouter();
-
-  const templates = useAppStore((s) => s.templates);
-  const sessions = useAppStore((s) => s.sessions);
-  const weeklyGoal = useAppStore((s) => s.weeklyGoal);
-  const setWeeklyGoal = useAppStore((s) => s.setWeeklyGoal);
-  const deleteTemplate = useAppStore((s) => s.deleteTemplate);
-  const startWorkoutFromTemplate = useAppStore((s) => s.startWorkoutFromTemplate);
-  const startEmptyWorkout = useAppStore((s) => s.startEmptyWorkout);
-  const startWorkoutFromSession = useAppStore((s) => s.startWorkoutFromSession);
-  const hideRecentSession = useAppStore((s) => s.hideRecentSession);
-  const createTemplateFromSession = useAppStore((s) => s.createTemplateFromSession);
-
-  const [search, setSearch] = useState('');
-
-  const filteredTemplates = useMemo(
-    () => templates.filter((template) => template.name.toLowerCase().includes(search.toLowerCase())),
-    [templates, search]
-  );
-
-  const handleRepeat = useCallback(
-    (sessionId: string) => {
-      startWorkoutFromSession(sessionId);
-      router.push('/active-workout');
-    },
-    [startWorkoutFromSession, router]
-  );
-
-  const handleLongPress = useCallback(
-    (sessionId: string) => {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-
-      const options = [t('cancel'), t('save_as_template'), t('hide')];
-      const destructiveButtonIndex = 2;
-      const cancelButtonIndex = 0;
-
-      if (Platform.OS === 'ios') {
-        ActionSheetIOS.showActionSheetWithOptions(
-          {
-            options,
-            cancelButtonIndex,
-            destructiveButtonIndex,
-            title: t('app_name'),
-          },
-          (buttonIndex) => {
-            if (buttonIndex === 1) {
-              createTemplateFromSession(sessionId);
-              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-              Alert.alert(t('done'), t('template_created'));
-            } else if (buttonIndex === 2) {
-              hideRecentSession(sessionId);
-            }
-          }
-        );
-      } else {
-        Alert.alert(t('app_name'), '', [
-          { text: t('cancel'), style: 'cancel' },
-          {
-            text: t('save_as_template'),
-            onPress: () => {
-              createTemplateFromSession(sessionId);
-              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-              Alert.alert(t('done'), t('template_created'));
-            },
-          },
-          {
-            text: t('hide'),
-            style: 'destructive',
-            onPress: () => hideRecentSession(sessionId),
-          },
-        ]);
-      }
-    },
-    [createTemplateFromSession, t, hideRecentSession]
-  );
-
-  const visibleRecentSessions = useMemo(
-    () => sessions.filter((s) => !s.isHiddenFromRecent).slice(0, 3),
-    [sessions]
-  );
-
-  const volumeData = useMemo(() => buildLast30DaysVolume(sessions), [sessions]);
-  const averageVolume = useMemo(() => {
-    if (volumeData.length === 0) return 0;
-    const total = volumeData.reduce((sum, point) => sum + point.value, 0);
-    return Number((total / volumeData.length).toFixed(1));
-  }, [volumeData]);
-
-  const completedWorkoutsThisWeek = useMemo(() => getCompletedWorkoutsInCurrentWeek(sessions), [sessions]);
-  const weeklyProgress = useMemo(
-    () => (weeklyGoal > 0 ? completedWorkoutsThisWeek / weeklyGoal : 0),
-    [completedWorkoutsThisWeek, weeklyGoal]
-  );
-  const weeklyProgressPercent = Math.round(weeklyProgress * 100);
-  const clampedWeeklyProgress = Math.max(0, Math.min(1, weeklyProgress));
-
-  const ringSize = 120;
-  const ringStroke = 10;
-  const ringRadius = (ringSize - ringStroke) / 2;
-  const ringCircumference = 2 * Math.PI * ringRadius;
-  const ringOffset = ringCircumference * (1 - clampedWeeklyProgress);
-
-  const chartHeight = 160;
-  const chartWidth = 340;
-  const chartTop = 12;
-  const chartRight = 12;
-  const chartBottom = 30;
-  const chartLeft = 30;
-  const graphWidth = chartWidth - chartLeft - chartRight;
-  const graphHeight = chartHeight - chartTop - chartBottom;
-
-  const maxY = Math.max(10, averageVolume, ...volumeData.map((point) => point.value));
-  const yTicks = [0, maxY * 0.25, maxY * 0.5, maxY * 0.75, maxY];
-
-  const xAt = (index: number) =>
-    chartLeft + (volumeData.length > 1 ? (index / (volumeData.length - 1)) * graphWidth : graphWidth / 2);
-  const yAt = (value: number) => chartTop + graphHeight - (value / maxY) * graphHeight;
-
-  const linePath = volumeData
-    .map((point, index) => `${index === 0 ? 'M' : 'L'} ${xAt(index)} ${yAt(point.value)}`)
-    .join(' ');
-
-  const showTemplateOptions = useCallback(
-    (templateId: string) => {
-      const onDelete = () => {
-        Alert.alert(t('delete'), t('delete_template_confirm'), [
-          { text: t('cancel'), style: 'cancel' },
-          {
-            text: t('delete'),
-            style: 'destructive',
-            onPress: () => deleteTemplate(templateId),
-          },
-        ]);
-      };
-
-      if (Platform.OS === 'ios') {
-        ActionSheetIOS.showActionSheetWithOptions(
-          {
-            options: [t('cancel'), t('edit'), t('delete')],
-            cancelButtonIndex: 0,
-            destructiveButtonIndex: 2,
-          },
-          (buttonIndex) => {
-            if (buttonIndex === 1) {
-              router.push(`/edit-template?id=${templateId}`);
-            }
-            if (buttonIndex === 2) {
-              onDelete();
-            }
-          }
-        );
-      } else {
-        Alert.alert(t('edit_template'), '', [
-          { text: t('cancel'), style: 'cancel' },
-          { text: t('edit'), onPress: () => router.push(`/edit-template?id=${templateId}`) },
-          { text: t('delete'), style: 'destructive', onPress: onDelete },
-        ]);
-      }
-    },
-    [deleteTemplate, router, t]
-  );
-
-  const confirmDeleteTemplate = useCallback(
-    (templateId: string) => {
-      Alert.alert(t('delete'), t('delete_template_confirm'), [
-        { text: t('cancel'), style: 'cancel' },
-        {
-          text: t('delete'),
-          style: 'destructive',
-          onPress: () => deleteTemplate(templateId),
+    const handleStartTemplate = useCallback(
+        (id: string) => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+            startWorkoutFromTemplate(id);
+            router.push('/active-workout');
         },
-      ]);
-    },
-    [deleteTemplate, t]
-  );
+        [startWorkoutFromTemplate, router]
+    );
 
-  const handleStartFromTemplate = useCallback(
-    (templateId: string) => {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-      startWorkoutFromTemplate(templateId);
-      router.push('/active-workout');
-    },
-    [startWorkoutFromTemplate, router]
-  );
+    const handleRepeat = useCallback(
+        (id: string) => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            startWorkoutFromSession(id);
+            router.push('/active-workout');
+        },
+        [startWorkoutFromSession, router]
+    );
 
-  const handleStartEmpty = useCallback(() => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    startEmptyWorkout();
-    router.push('/active-workout');
-  }, [startEmptyWorkout, router]);
+    const handleEmpty = useCallback(() => {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        startEmptyWorkout();
+        router.push('/active-workout');
+    }, [startEmptyWorkout, router]);
 
-  return (
-    <ScreenBackground style={styles.container}>
-      <ScrollView
-        contentContainerStyle={{ paddingBottom: 120, paddingHorizontal: 16, paddingTop: 12 }}
-        showsVerticalScrollIndicator={false}
-        scrollEventThrottle={16}
-        nestedScrollEnabled={true}
-      >
-        <Animated.View
-          entering={FadeInDown.duration(400).delay(0).damping(20).springify()}
-          style={[styles.titleRow, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}
-        >
-          <Text
-            style={[
-              styles.title,
-              { color: colors.onSurface, fontFamily: fontBold, textAlign: isRTL ? 'right' : 'left' },
-            ]}
-          >
-            {t('tab_home')}
-          </Text>
-          <AnimatedPressable
-            onPress={handleStartEmpty}
-            haptic
-            style={[
-              styles.emptyWorkoutBtn,
-              {
-                backgroundColor: colors.primaryContainer,
-                flexDirection: isRTL ? 'row-reverse' : 'row',
-              },
-            ]}
-          >
-            <MaterialIcons name="add" size={16} color={colors.onPrimaryContainer} />
-            <Text
-              style={[
-                styles.emptyWorkoutBtnText,
-                { color: colors.onPrimaryContainer, fontFamily: fontBold, textAlign: isRTL ? 'right' : 'left' },
-              ]}
+    const goalProgress = Math.min(1, weekly / Math.max(1, weeklyGoal));
+    const newestAch = recentlyUnlocked[0]
+        ? achievementCatalog.find((a) => a.id === recentlyUnlocked[0])
+        : null;
+
+    return (
+        <ScreenBackground style={{ flex: 1 }}>
+            <ScrollView
+                contentContainerStyle={{
+                    paddingTop: insets.top + 8,
+                    paddingBottom: insets.bottom + 140,
+                    paddingHorizontal: tokens.spacing.lg,
+                    gap: tokens.spacing.md,
+                }}
+                showsVerticalScrollIndicator={false}
             >
-              {t('start_empty_workout')}
-            </Text>
-          </AnimatedPressable>
-        </Animated.View>
+                <LargeTitle title={t(greetingKey())} subtitle={weekly > 0 ? t('ready_to_train') : t('rest_day')} />
 
-        <Animated.View
-          entering={FadeInDown.duration(450).delay(80).damping(18).springify()}
-          style={[
-            styles.dashboardWidget,
-            {
-              backgroundColor: colors.surfaceContainerLow,
-              borderColor: colors.primary,
-              shadowColor: colors.primary,
-            },
-          ]}
-        >
-          <View style={[styles.dashboardSections, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
-            <View style={styles.weeklySection}>
-              <Text
-                style={[
-                  styles.widgetSectionTitle,
-                  { color: colors.onSurface, fontFamily: fontBold, textAlign: isRTL ? 'right' : 'left' },
-                ]}
-              >
-                {t('weekly_goal')}
-              </Text>
+                {/* ── PR / Achievement banners ───────────────────────────── */}
+                {recentPRBanner ? (
+                    <Animated.View entering={FadeInDown.springify()}>
+                        <Pressable onPress={dismissPRBanner}>
+                            <View style={[styles.banner, { backgroundColor: colors.primaryContainer, borderColor: colors.primary }]}>
+                                <Text style={{ fontSize: 28 }}>🏆</Text>
+                                <View style={{ flex: 1 }}>
+                                    <Text style={{ color: colors.onPrimaryContainer, fontFamily: fontBold, fontSize: 16 }}>
+                                        {t('new_pr')}
+                                    </Text>
+                                    <Text style={{ color: colors.onPrimaryContainer, fontFamily: fontRegular, fontSize: 12, marginTop: 2 }}>
+                                        {recentPRBanner.prCount} {t('sets').toLowerCase()} · {t('tap_to_dismiss')}
+                                    </Text>
+                                </View>
+                                <Ionicons name="close-circle" size={22} color={colors.onPrimaryContainer} />
+                            </View>
+                        </Pressable>
+                    </Animated.View>
+                ) : null}
 
-              <View style={styles.progressRingWrap}>
-                <Svg width={ringSize} height={ringSize}>
-                  <Circle
-                    cx={ringSize / 2}
-                    cy={ringSize / 2}
-                    r={ringRadius}
-                    stroke={colors.outlineVariant}
-                    strokeWidth={ringStroke}
-                    fill="none"
-                  />
-                  <Circle
-                    cx={ringSize / 2}
-                    cy={ringSize / 2}
-                    r={ringRadius}
-                    stroke={colors.primary}
-                    strokeWidth={ringStroke}
-                    strokeLinecap="round"
-                    fill="none"
-                    strokeDasharray={`${ringCircumference} ${ringCircumference}`}
-                    strokeDashoffset={ringOffset}
-                    originX={ringSize / 2}
-                    originY={ringSize / 2}
-                    rotation={-90}
-                  />
-                </Svg>
-                <View style={styles.progressRingCenter}>
-                  <Text style={[styles.progressPercent, { color: colors.primary, fontFamily: fontBold }]}>
-                    {weeklyProgressPercent}%
-                  </Text>
-                </View>
-              </View>
+                {newestAch ? (
+                    <Animated.View entering={FadeInDown.delay(80).springify()}>
+                        <Pressable onPress={dismissAchievementBanner}>
+                            <View style={[styles.banner, { backgroundColor: colors.surfaceContainerHigh, borderColor: colors.outline }]}>
+                                <Text style={{ fontSize: 28 }}>{newestAch.emoji}</Text>
+                                <View style={{ flex: 1 }}>
+                                    <Text style={{ color: colors.onSurface, fontFamily: fontBold, fontSize: 16 }}>
+                                        {t(newestAch.titleKey as any)}
+                                    </Text>
+                                    <Text style={{ color: colors.onSurfaceVariant, fontFamily: fontRegular, fontSize: 12 }}>
+                                        {t(newestAch.descriptionKey as any)}
+                                    </Text>
+                                </View>
+                                <Ionicons name="close-circle" size={22} color={colors.onSurfaceVariant} />
+                            </View>
+                        </Pressable>
+                    </Animated.View>
+                ) : null}
 
-              <Text
-                style={[
-                  styles.widgetSectionSubtitle,
-                  { color: colors.onSurfaceVariant, fontFamily: fontRegular, textAlign: isRTL ? 'right' : 'left' },
-                ]}
-              >
-                {`${weeklyProgressPercent}% | ${completedWorkoutsThisWeek}/${weeklyGoal} ${t('workouts_unit')}`}
-              </Text>
+                {/* ── Hero stats: weekly goal + streak ────────────────────── */}
+                <Animated.View entering={FadeInDown.delay(60).springify()}>
+                    <Card style={{ flexDirection: isRTL ? 'row-reverse' : 'row', alignItems: 'center', gap: tokens.spacing.lg }}>
+                        <ProgressRing
+                            progress={goalProgress}
+                            size={104}
+                            stroke={11}
+                            label={`${weekly}/${weeklyGoal}`}
+                            sublabel={t('this_week')}
+                        />
+                        <View style={{ flex: 1, gap: 12 }}>
+                            <View>
+                                <Text style={{ color: colors.onSurfaceVariant, fontFamily: fontBold, fontSize: 11, letterSpacing: 0.6, textTransform: 'uppercase' }}>
+                                    {t('current_streak')}
+                                </Text>
+                                <Text style={{ color: colors.onSurface, fontFamily: fontBold, fontSize: 32, letterSpacing: -0.5 }}>
+                                    {streak.currentWeeks}{' '}
+                                    <Text style={{ fontSize: 14, color: colors.onSurfaceVariant }}>{t('weeks_unit')}</Text>
+                                </Text>
+                            </View>
+                            <View style={{ flexDirection: 'row', gap: 6 }}>
+                                <Badge label={`🏅 ${unlockedAchievements.length}`} color={colors.surfaceContainerHigh} />
+                                {streak.daysSinceLastWorkout != null ? (
+                                    <Badge
+                                        label={`${streak.daysSinceLastWorkout}${t('days_unit')}`}
+                                        color={colors.surfaceContainerHigh}
+                                    />
+                                ) : null}
+                            </View>
+                        </View>
+                    </Card>
+                </Animated.View>
 
-              <View style={[styles.goalAdjustRow, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
-                <TouchableOpacity
-                  style={[styles.goalAdjustBtn, { borderColor: colors.outlineVariant }]}
-                  onPress={() => setWeeklyGoal(weeklyGoal - 1)}
-                  accessibilityRole="button"
-                  accessibilityLabel="Decrease weekly goal"
-                >
-                  <MaterialIcons name="remove" size={16} color={colors.primary} />
-                </TouchableOpacity>
-                <Text style={[styles.goalAdjustText, { color: colors.onSurface, fontFamily: fontBold }]}>
-                  {weeklyGoal} {t('workouts_unit')}
-                </Text>
-                <TouchableOpacity
-                  style={[styles.goalAdjustBtn, { borderColor: colors.outlineVariant }]}
-                  onPress={() => setWeeklyGoal(weeklyGoal + 1)}
-                  accessibilityRole="button"
-                  accessibilityLabel="Increase weekly goal"
-                >
-                  <MaterialIcons name="add" size={16} color={colors.primary} />
-                </TouchableOpacity>
-              </View>
-            </View>
+                {/* ── Next workout ────────────────────────────────────────── */}
+                {nextRoutine ? (
+                    <Animated.View entering={FadeInDown.delay(100).springify()}>
+                        <SectionHeader title={t('next_workout')} />
+                        <Card>
+                            <View style={{ flexDirection: isRTL ? 'row-reverse' : 'row', alignItems: 'center', gap: 14 }}>
+                                <View
+                                    style={[
+                                        styles.routineEmoji,
+                                        { backgroundColor: nextRoutine.colorTag ?? colors.primaryContainer },
+                                    ]}
+                                >
+                                    <Text style={{ fontSize: 24 }}>{nextRoutine.emoji ?? '💪'}</Text>
+                                </View>
+                                <View style={{ flex: 1 }}>
+                                    <Text style={{ color: colors.onSurface, fontFamily: fontBold, fontSize: 18, textAlign: isRTL ? 'right' : 'left' }}>
+                                        {nextRoutine.name}
+                                    </Text>
+                                    <Text style={{ color: colors.onSurfaceVariant, fontFamily: fontRegular, fontSize: 13, marginTop: 2, textAlign: isRTL ? 'right' : 'left' }}>
+                                        {nextRoutine.exercises.length} {t('template_exercises').toLowerCase()} ·{' '}
+                                        {nextRoutine.exercises.reduce((s, e) => s + e.sets, 0)} {t('sets').toLowerCase()}
+                                    </Text>
+                                </View>
+                            </View>
+                            <View style={{ height: 12 }} />
+                            <PillButton
+                                title={t('start_workout')}
+                                icon="play"
+                                fullWidth
+                                onPress={() => handleStartTemplate(nextRoutine.id)}
+                            />
+                        </Card>
+                    </Animated.View>
+                ) : (
+                    <Animated.View entering={FadeInDown.delay(100).springify()}>
+                        <SectionHeader title={t('quick_start')} />
+                        <Card>
+                            <Text style={{ color: colors.onSurfaceVariant, fontFamily: fontRegular, fontSize: 14, marginBottom: 12, textAlign: isRTL ? 'right' : 'left' }}>
+                                {t('no_routines_hint')}
+                            </Text>
+                            <View style={{ flexDirection: 'row', gap: 8 }}>
+                                <PillButton title={t('empty_workout')} icon="flash" variant="primary" onPress={handleEmpty} />
+                                <PillButton
+                                    title={t('pick_template')}
+                                    icon="list"
+                                    variant="secondary"
+                                    onPress={() => router.navigate('/(tabs)/library' as any)}
+                                />
+                            </View>
+                        </Card>
+                    </Animated.View>
+                )}
 
-            <View style={[styles.sectionDivider, { backgroundColor: colors.outlineVariant }]} />
+                {/* ── Smart suggestions ───────────────────────────────────── */}
+                {suggestions.length > 0 ? (
+                    <Animated.View entering={FadeInDown.delay(140).springify()}>
+                        <SectionHeader title={t('suggested_for_you')} />
+                        <Card style={{ padding: 0 }}>
+                            {suggestions.map((s, i) => (
+                                <ListRow
+                                    key={s.exerciseId}
+                                    title={s.name}
+                                    subtitle={
+                                        s.suggestion?.reason === 'increase_weight'
+                                            ? t('suggestion_increase_weight')
+                                            : s.suggestion?.reason === 'increase_reps'
+                                                ? t('suggestion_increase_reps')
+                                                : t('suggestion_hold')
+                                    }
+                                    value={`${s.suggestion?.weight}${'kg'} × ${s.suggestion?.reps}`}
+                                    separator={i < suggestions.length - 1}
+                                    leading={
+                                        <View style={[styles.suggestIcon, { backgroundColor: colors.primaryContainer }]}>
+                                            <Ionicons name="trending-up" size={16} color={colors.primary} />
+                                        </View>
+                                    }
+                                />
+                            ))}
+                        </Card>
+                    </Animated.View>
+                ) : null}
 
-            <View style={styles.volumeSection}>
-              <Text
-                style={[
-                  styles.widgetSectionTitle,
-                  { color: colors.onSurface, fontFamily: fontBold, textAlign: isRTL ? 'right' : 'left' },
-                ]}
-              >
-                {t('volume_progress')}
-              </Text>
+                {/* ── Muscle balance ──────────────────────────────────────── */}
+                <Animated.View entering={FadeInDown.delay(180).springify()}>
+                    <SectionHeader title={t('muscle_balance')} />
+                    <Card>
+                        <Text style={{ color: colors.onSurfaceVariant, fontFamily: fontRegular, fontSize: 12, marginBottom: 12, textAlign: isRTL ? 'right' : 'left' }}>
+                            {t('last_14_days')}
+                        </Text>
+                        <View style={{ gap: 10 }}>
+                            {bodyPartKeys
+                                .filter((bp) => bp !== 'cardio' && bp !== 'other')
+                                .map((bp) => {
+                                    const v = muscleBalance[bp] ?? 0;
+                                    return (
+                                        <View key={bp} style={{ flexDirection: isRTL ? 'row-reverse' : 'row', alignItems: 'center', gap: 12 }}>
+                                            <Text style={{ width: 80, color: colors.onSurface, fontFamily: fontBold, fontSize: 13, textAlign: isRTL ? 'right' : 'left' }}>
+                                                {t(bodyPartNameKeys[bp] as any)}
+                                            </Text>
+                                            <View style={{ flex: 1, height: 8, borderRadius: 4, backgroundColor: colors.fillTertiary, overflow: 'hidden' }}>
+                                                <View
+                                                    style={{
+                                                        width: `${Math.max(4, v * 100)}%`,
+                                                        height: '100%',
+                                                        backgroundColor: v > 0.05 ? colors.primary : colors.outline,
+                                                        borderRadius: 4,
+                                                    }}
+                                                />
+                                            </View>
+                                        </View>
+                                    );
+                                })}
+                        </View>
+                    </Card>
+                </Animated.View>
 
-              <View style={[styles.volumeMetaRow, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
-                <Text style={[styles.widgetSectionSubtitle, { color: colors.onSurfaceVariant, fontFamily: fontRegular }]}>
-                  {t('last_30_days')}
-                </Text>
-                <Text style={[styles.widgetSectionSubtitle, { color: colors.onSurfaceVariant, fontFamily: fontRegular }]}>
-                  {`${t('average_label')}: ${formatVolume(averageVolume)}Kg`}
-                </Text>
-              </View>
-
-              <View style={styles.customChartWrap}>
-                <Svg width="100%" height={chartHeight} viewBox={`0 0 ${chartWidth} ${chartHeight}`}>
-                  {yTicks.map((tick) => (
-                    <Line
-                      key={`grid-${tick}`}
-                      x1={chartLeft}
-                      y1={yAt(tick)}
-                      x2={chartWidth - chartRight}
-                      y2={yAt(tick)}
-                      stroke={colors.outlineVariant}
-                      strokeOpacity={0.35}
-                      strokeWidth={1}
-                    />
-                  ))}
-
-                  <Line
-                    x1={chartLeft}
-                    y1={yAt(averageVolume)}
-                    x2={chartWidth - chartRight}
-                    y2={yAt(averageVolume)}
-                    stroke={colors.primary}
-                    strokeOpacity={0.8}
-                    strokeWidth={1.5}
-                    strokeDasharray="6 5"
-                  />
-
-                  <Line
-                    x1={chartLeft}
-                    y1={chartTop}
-                    x2={chartLeft}
-                    y2={chartHeight - chartBottom}
-                    stroke={colors.outline}
-                    strokeWidth={1}
-                  />
-                  <Line
-                    x1={chartLeft}
-                    y1={chartHeight - chartBottom}
-                    x2={chartWidth - chartRight}
-                    y2={chartHeight - chartBottom}
-                    stroke={colors.outline}
-                    strokeWidth={1}
-                  />
-
-                  {linePath.length > 0 ? (
-                    <Path d={linePath} stroke={colors.primary} strokeWidth={3} fill="none" strokeLinecap="round" />
-                  ) : null}
-
-                  {volumeData.map((point, index) => (
-                    <Circle
-                      key={`point-${point.date}`}
-                      cx={xAt(index)}
-                      cy={yAt(point.value)}
-                      r={3.5}
-                      fill={colors.primary}
-                    />
-                  ))}
-
-                  {yTicks.map((tick) => (
-                    <SvgText
-                      key={`y-${tick}`}
-                      x={chartLeft - 6}
-                      y={yAt(tick) + 4}
-                      fill={colors.onSurfaceVariant}
-                      fontSize="10"
-                      textAnchor="end"
-                    >
-                      {tick.toFixed(1)}
-                    </SvgText>
-                  ))}
-
-                  {volumeData.map((point, index) => (
-                    <SvgText
-                      key={`x-${point.date}`}
-                      x={xAt(index)}
-                      y={chartHeight - 10}
-                      fill={colors.onSurfaceVariant}
-                      fontSize="10"
-                      textAnchor="middle"
-                    >
-                      {point.label}
-                    </SvgText>
-                  ))}
-                </Svg>
-              </View>
-            </View>
-          </View>
-        </Animated.View>
-
-        <SearchBox value={search} onChangeText={setSearch} placeholder={t('templates_search')} />
-
-        <AnimatedPressable
-          style={[
-            styles.createTemplateBtn,
-            {
-              backgroundColor: colors.surfaceContainerHighest,
-              flexDirection: isRTL ? 'row-reverse' : 'row',
-            },
-          ]}
-          onPress={() => router.push('/create-template')}
-        >
-          <MaterialIcons name="post-add" size={18} color={colors.primary} />
-          <Text
-            style={[
-              styles.createTemplateBtnText,
-              { color: colors.primary, fontFamily: fontBold, textAlign: isRTL ? 'right' : 'left' },
-            ]}
-          >
-            {t('create_template')}
-          </Text>
-        </AnimatedPressable>
-
-        {filteredTemplates.map((template, index) => (
-          <Animated.View
-            key={template.id}
-            entering={FadeInDown.duration(350).delay(150 + index * 50).damping(20).springify()}
-          >
-            <TemplateCard
-              template={template}
-              onStart={handleStartFromTemplate}
-              onEdit={showTemplateOptions}
-              onDelete={confirmDeleteTemplate}
-            />
-          </Animated.View>
-        ))}
-
-        <View style={[styles.historyHeaderRow, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
-          <Text
-            style={[
-              styles.historyTitle,
-              { color: colors.onSurface, fontFamily: fontBold, textAlign: isRTL ? 'right' : 'left' },
-            ]}
-          >
-            {t('recent_workouts')}
-          </Text>
-          <TouchableOpacity onPress={() => router.push('/(tabs)/history')}>
-            <Text
-              style={[
-                styles.seeAllBtn,
-                { color: colors.primary, fontFamily: fontBold, textAlign: isRTL ? 'left' : 'right' },
-              ]}
-            >
-              {t('see_all')}
-            </Text>
-          </TouchableOpacity>
-        </View>
-
-        {visibleRecentSessions.map((session, index) => {
-          const renderHideAction = () => (
-            <RectButton
-              style={[styles.swipeDeleteAction, { backgroundColor: colors.outlineVariant }]}
-              onPress={() => {
-                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-                hideRecentSession(session.id);
-              }}
-              accessibilityRole="button"
-              accessibilityLabel={t('hide')}
-            >
-              <MaterialIcons name="visibility-off" size={18} color={colors.onSurfaceVariant} />
-              <Text style={[styles.swipeDeleteText, { color: colors.onSurfaceVariant, fontFamily: fontBold }]}>
-                {t('hide')}
-              </Text>
-            </RectButton>
-          );
-
-          return (
-            <Animated.View
-              key={session.id}
-              entering={FadeInDown.duration(350).delay(250 + index * 60).damping(20).springify()}
-            >
-              <Swipeable
-                overshootLeft={false}
-                overshootRight={false}
-                {...(isRTL
-                  ? { renderLeftActions: renderHideAction }
-                  : { renderRightActions: renderHideAction })}
-              >
-                <SessionCard 
-                  session={session} 
-                  onRepeat={handleRepeat} 
-                  onLongPress={handleLongPress}
-                />
-              </Swipeable>
-            </Animated.View>
-          );
-        })}
-      </ScrollView>
-    </ScreenBackground>
-  );
+                {/* ── Recent ──────────────────────────────────────────────── */}
+                {recentSessions.length > 0 ? (
+                    <Animated.View entering={FadeInDown.delay(220).springify()}>
+                        <SectionHeader title={t('recent_workouts')} trailing={
+                            <Pressable onPress={() => router.navigate('/(tabs)/history' as any)}>
+                                <Text style={{ color: colors.primary, fontFamily: fontBold, fontSize: 13 }}>
+                                    {t('view_all')}
+                                </Text>
+                            </Pressable>
+                        } />
+                        <Card style={{ padding: 0 }}>
+                            {recentSessions.map((s, i) => (
+                                <ListRow
+                                    key={s.id}
+                                    title={s.name}
+                                    subtitle={`${s.date} · ${s.durationMinutes ?? 0}${t('minutes')}`}
+                                    value={`${formatVolume(s.totalVolume ?? 0)}kg`}
+                                    separator={i < recentSessions.length - 1}
+                                    onPress={() => handleRepeat(s.id)}
+                                    chevron
+                                />
+                            ))}
+                        </Card>
+                    </Animated.View>
+                ) : null}
+            </ScrollView>
+        </ScreenBackground>
+    );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  titleRow: {
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 12,
-    gap: 10,
-  },
-  title: {
-    fontSize: 34,
-  },
-  emptyWorkoutBtn: {
-    borderRadius: 14,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  emptyWorkoutBtnText: {
-    fontSize: 12,
-  },
-  dashboardWidget: {
-    borderRadius: 22,
-    paddingHorizontal: 14,
-    paddingVertical: 14,
-    marginBottom: 16,
-    borderWidth: 1.5,
-    shadowOpacity: 0.35,
-    shadowRadius: 16,
-    shadowOffset: { width: 0, height: 0 },
-    elevation: 9,
-  },
-  dashboardSections: {
-    alignItems: 'stretch',
-  },
-  weeklySection: {
-    flex: 0.9,
-    paddingHorizontal: 6,
-  },
-  volumeSection: {
-    flex: 1.6,
-    paddingHorizontal: 8,
-  },
-  sectionDivider: {
-    width: 1,
-    borderRadius: 1,
-    opacity: 0.7,
-  },
-  widgetSectionTitle: {
-    fontSize: 16,
-  },
-  widgetSectionSubtitle: {
-    fontSize: 12,
-    marginTop: 2,
-  },
-  progressRingWrap: {
-    width: 120,
-    height: 120,
-    alignSelf: 'center',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 10,
-    marginBottom: 8,
-  },
-  progressRingCenter: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    top: 0,
-    bottom: 0,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  progressPercent: {
-    fontSize: 24,
-  },
-  goalAdjustRow: {
-    marginTop: 10,
-    width: '100%',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    paddingHorizontal: 4,
-  },
-  goalAdjustBtn: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  goalAdjustText: {
-    fontSize: 12,
-    flexShrink: 1,
-    textAlign: 'center',
-  },
-  volumeMetaRow: {
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  customChartWrap: {
-    marginTop: 8,
-    height: 160,
-  },
-  createTemplateBtn: {
-    borderRadius: 14,
-    paddingVertical: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    marginBottom: 10,
-    marginTop: 4,
-  },
-  createTemplateBtnText: {
-    fontSize: 13,
-  },
-  templateCard: {
-    borderRadius: 16,
-    padding: 14,
-    marginBottom: 10,
-  },
-  templateRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  templateTitle: {
-    fontSize: 17,
-  },
-  templateMeta: {
-    fontSize: 12,
-    marginTop: 2,
-  },
-  moreBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  startBtn: {
-    marginTop: 10,
-    borderRadius: 12,
-    paddingVertical: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexDirection: 'row',
-    gap: 6,
-  },
-  startBtnText: {
-    fontSize: 13,
-  },
-  historyHeaderRow: {
-    marginTop: 16,
-    marginBottom: 12,
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  historyTitle: {
-    fontSize: 22,
-  },
-  seeAllBtn: {
-    fontSize: 13,
-  },
-  swipeDeleteAction: {
-    width: 84,
-    borderRadius: 16,
-    marginBottom: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-  },
-  swipeDeleteText: {
-    fontSize: 10,
-  },
+    banner: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 14,
+        padding: tokens.spacing.lg,
+        borderRadius: tokens.radius.lg,
+        borderWidth: StyleSheet.hairlineWidth,
+    },
+    routineEmoji: {
+        width: 56,
+        height: 56,
+        borderRadius: 16,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    suggestIcon: {
+        width: 32,
+        height: 32,
+        borderRadius: 16,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
 });

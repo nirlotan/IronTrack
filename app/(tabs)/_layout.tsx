@@ -1,149 +1,177 @@
-import { Tabs } from 'expo-router';
-import { usePathname, useRouter } from 'expo-router';
-import { Platform, StyleSheet, View, Text } from 'react-native';
-import Animated, { FadeInUp, FadeOutDown, SlideInDown, SlideOutDown } from 'react-native-reanimated';
-import { MaterialIcons } from '@expo/vector-icons';
+import { Tabs, useRouter, usePathname } from 'expo-router';
+import { StyleSheet, View, Text, Pressable } from 'react-native';
+import Animated, {
+  SlideInDown,
+  SlideOutDown,
+  useSharedValue,
+  withSpring,
+  useAnimatedStyle,
+  useAnimatedProps,
+} from 'react-native-reanimated';
+import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../src/theme';
 import { useTranslation } from '../../src/i18n';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAppStore } from '../../src/store/appStore';
-import { AnimatedPressable } from '../../src/components/AnimatedPressable';
+import { GradientFAB } from '../../src/components/ios';
+import * as Haptics from 'expo-haptics';
+import { useEffect } from 'react';
+
+const TAB_BAR_HEIGHT = 56;
+
+interface TabDef {
+  name: string;
+  labelKey: string;
+  icon: React.ComponentProps<typeof Ionicons>['name'];
+  iconFocused: React.ComponentProps<typeof Ionicons>['name'];
+}
+
+const TABS: TabDef[] = [
+  { name: 'index', labelKey: 'tab_today', icon: 'today-outline', iconFocused: 'today' },
+  { name: 'library', labelKey: 'tab_train', icon: 'barbell-outline', iconFocused: 'barbell' },
+  { name: 'history', labelKey: 'tab_insights', icon: 'pulse-outline', iconFocused: 'pulse' },
+  { name: 'settings', labelKey: 'tab_profile', icon: 'person-circle-outline', iconFocused: 'person-circle' },
+];
+
+function TabIcon({
+  focused,
+  icon,
+  iconFocused,
+  color,
+}: {
+  focused: boolean;
+  icon: any;
+  iconFocused: any;
+  color: string;
+}) {
+  const scale = useSharedValue(focused ? 1.1 : 1);
+  useEffect(() => {
+    scale.value = withSpring(focused ? 1.12 : 1, { damping: 14, stiffness: 240 });
+  }, [focused]);
+  const animatedStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
+  return (
+    <Animated.View style={animatedStyle}>
+      <Ionicons name={focused ? iconFocused : icon} size={26} color={color} />
+    </Animated.View>
+  );
+}
 
 export default function TabsLayout() {
-  const { colors, isDark } = useTheme();
-  const { t, isRTL, fontBold } = useTranslation();
+  const { colors } = useTheme();
+  const { t, fontBold } = useTranslation();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const pathname = usePathname();
   const activeWorkout = useAppStore((s) => s.activeWorkout);
+  const startEmptyWorkout = useAppStore((s) => s.startEmptyWorkout);
 
   const isWorkoutModalOpen = pathname === '/active-workout';
   const showNowTrainingBar = Boolean(activeWorkout) && !isWorkoutModalOpen;
 
+  const handleFAB = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    if (activeWorkout) {
+      router.push('/active-workout');
+      return;
+    }
+    startEmptyWorkout();
+    router.push('/active-workout');
+  };
+
   return (
     <>
       <Tabs
-        screenOptions={{
-          headerShown: true,
-          headerTransparent: false,
-          headerStyle: {
-            backgroundColor: colors.surfaceContainerHighest,
-            shadowColor: colors.primary,
-            shadowOffset: { width: 0, height: -2 },
-            shadowOpacity: 0.1,
-            shadowRadius: 4,
-            elevation: 4,
-          },
-          headerTitleStyle: {
-            fontFamily: 'SpaceGrotesk_700Bold',
-            fontSize: 22,
-            letterSpacing: -0.5,
-          },
-          tabBarStyle: {
-            backgroundColor: isDark ? 'rgba(14,18,14,0.94)' : 'rgba(255,255,255,0.94)',
-            borderTopColor: isDark ? 'rgba(61,90,61,0.3)' : 'rgba(34,197,94,0.2)',
-            borderTopWidth: 1,
-            height: 70 + insets.bottom + (showNowTrainingBar ? 52 : 0),
-            paddingTop: 8,
-            paddingBottom: insets.bottom + 4,
-            ...(Platform.OS === 'ios' && {
-              position: 'absolute' as const,
-            }),
-          },
-          tabBarActiveTintColor: colors.primary,
-          tabBarInactiveTintColor: colors.outlineVariant,
-          tabBarLabelStyle: {
-            fontFamily: 'SpaceGrotesk_700Bold',
-            fontSize: 11,
-            letterSpacing: 1,
-            textTransform: 'uppercase',
-          },
-          lazy: false,
-          tabBarBackground: () => (
+        screenOptions={{ headerShown: false, tabBarStyle: { display: 'none' } }}
+        tabBar={({ state, navigation }) => {
+          const left = TABS.slice(0, 2);
+          const right = TABS.slice(2);
+          const renderTab = (tab: TabDef) => {
+            const routeIndex = state.routes.findIndex((r) => r.name === tab.name);
+            const focused = state.index === routeIndex;
+            const tint = focused ? colors.primary : colors.onSurfaceVariant;
+            return (
+              <Pressable
+                key={tab.name}
+                onPress={() => {
+                  Haptics.selectionAsync();
+                  navigation.navigate(tab.name as never);
+                }}
+                style={styles.tabButton}
+                accessibilityRole="tab"
+                accessibilityState={{ selected: focused }}
+              >
+                <TabIcon focused={focused} icon={tab.icon} iconFocused={tab.iconFocused} color={tint} />
+                <Text style={[styles.tabLabel, { color: tint, fontFamily: fontBold }]}>{t(tab.labelKey as any)}</Text>
+              </Pressable>
+            );
+          };
+
+          return (
             <View
-              style={{
-                ...StyleSheet.absoluteFillObject,
-                backgroundColor: isDark ? 'rgba(12,16,12,0.82)' : 'rgba(252,255,252,0.82)',
-                borderTopWidth: 1,
-                borderTopColor: isDark ? 'rgba(95,126,95,0.25)' : 'rgba(64,96,64,0.12)',
-              }}
-            />
-          ),
+              style={[styles.tabBarWrap, { paddingBottom: insets.bottom > 0 ? insets.bottom : 10 }]}
+              pointerEvents="box-none"
+            >
+              <View
+                style={[
+                  styles.tabBarTrack,
+                  {
+                    backgroundColor: colors.glassFill,
+                    borderColor: colors.separator,
+                    height: TAB_BAR_HEIGHT,
+                  },
+                ]}
+              >
+                {left.map(renderTab)}
+                <View style={styles.fabSlot} />
+                {right.map(renderTab)}
+              </View>
+              <View
+                style={[
+                  styles.fabOverlay,
+                  { bottom: (insets.bottom > 0 ? insets.bottom : 10) + TAB_BAR_HEIGHT - 30 },
+                ]}
+                pointerEvents="box-none"
+              >
+                <GradientFAB
+                  onPress={handleFAB}
+                  icon={activeWorkout ? 'flash' : 'add'}
+                  size={62}
+                  label={t((activeWorkout ? 'resume' : 'tab_start') as any)}
+                />
+              </View>
+            </View>
+          );
         }}
       >
-        <Tabs.Screen
-          name="index"
-          options={{
-            title: t('tab_home'),
-            headerShown: true,
-            tabBarIcon: ({ focused, color }) => (
-              <MaterialIcons name="assignment" size={24} color={color} />
-            ),
-          }}
-        />
-        <Tabs.Screen
-          name="library"
-          options={{
-            title: t('tab_library'),
-            headerShown: true,
-            tabBarIcon: ({ focused, color }) => (
-              <MaterialIcons name="menu-book" size={24} color={color} />
-            ),
-          }}
-        />
-        <Tabs.Screen
-          name="history"
-          options={{
-            title: t('tab_history'),
-            headerShown: true,
-            tabBarIcon: ({ focused, color }) => (
-              <MaterialIcons name="bar-chart" size={24} color={color} />
-            ),
-          }}
-        />
-        <Tabs.Screen
-          name="settings"
-          options={{
-            title: t('tab_settings'),
-            headerShown: true,
-            tabBarIcon: ({ focused, color }) => (
-              <MaterialIcons name="tune" size={24} color={color} />
-            ),
-          }}
-        />
-        <Tabs.Screen
-          name="workout"
-          options={{
-            href: null,
-          }}
-        />
+        <Tabs.Screen name="index" />
+        <Tabs.Screen name="library" />
+        <Tabs.Screen name="history" />
+        <Tabs.Screen name="settings" />
+        <Tabs.Screen name="workout" options={{ href: null }} />
       </Tabs>
+
       {showNowTrainingBar && (
         <Animated.View
-          entering={SlideInDown.duration(350).damping(18).springify()}
-          exiting={SlideOutDown.duration(250)}
+          entering={SlideInDown.duration(300)}
+          exiting={SlideOutDown.duration(220)}
           style={[
-            styles.nowTrainingContainer,
+            styles.nowTraining,
             {
-              bottom: 58 + insets.bottom,
-              backgroundColor: isDark ? 'rgba(22,30,22,0.9)' : 'rgba(246,253,244,0.92)',
-              borderColor: isDark ? 'rgba(117,154,117,0.32)' : 'rgba(65,102,65,0.16)',
+              bottom: insets.bottom + TAB_BAR_HEIGHT + 48,
+              backgroundColor: colors.surfaceContainerHigh,
+              borderColor: colors.separator,
             },
           ]}
         >
-          <AnimatedPressable
-            style={styles.nowTrainingInner}
-            onPress={() => router.push('/active-workout')}
-          >
-            <MaterialIcons name="fitness-center" size={16} color={colors.primary} />
+          <Pressable style={styles.nowTrainingInner} onPress={() => router.push('/active-workout')}>
+            <View style={[styles.pulseDot, { backgroundColor: colors.primary }]} />
             <Text style={[styles.nowTrainingText, { color: colors.onSurface, fontFamily: fontBold }]}>
               {t('now_training')}
             </Text>
-            <View style={styles.nowTrainingSpacer} />
-            <Text style={[styles.resumeText, { color: colors.primary, fontFamily: fontBold }]}>
-              {t('resume')}
-            </Text>
-          </AnimatedPressable>
+            <View style={{ flex: 1 }} />
+            <Text style={[styles.resumeText, { color: colors.primary, fontFamily: fontBold }]}>{t('resume')}</Text>
+            <Ionicons name="chevron-forward" size={16} color={colors.primary} />
+          </Pressable>
         </Animated.View>
       )}
     </>
@@ -151,34 +179,36 @@ export default function TabsLayout() {
 }
 
 const styles = StyleSheet.create({
-  tabLabel: {
-    fontSize: 9,
-    marginTop: 2,
-    letterSpacing: 1.5,
-    textTransform: 'uppercase',
-  },
-  nowTrainingContainer: {
+  tabBarWrap: {
     position: 'absolute',
     left: 12,
     right: 12,
-    borderRadius: 16,
-    borderWidth: 1,
-    minHeight: 44,
-    paddingHorizontal: 14,
+    bottom: 0,
+    alignItems: 'stretch',
   },
-  nowTrainingInner: {
+  tabBarTrack: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    paddingVertical: 10,
+    borderRadius: 26,
+    borderWidth: StyleSheet.hairlineWidth,
+    overflow: 'hidden',
+    paddingHorizontal: 6,
   },
-  nowTrainingText: {
-    fontSize: 13,
+  tabButton: { flex: 1, height: TAB_BAR_HEIGHT, alignItems: 'center', justifyContent: 'center', gap: 2 },
+  tabLabel: { fontSize: 10, letterSpacing: 0.4 },
+  fabSlot: { width: 72 },
+  fabOverlay: { position: 'absolute', left: 0, right: 0, alignItems: 'center' },
+  nowTraining: {
+    position: 'absolute',
+    left: 16,
+    right: 16,
+    borderRadius: 14,
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: 14,
+    minHeight: 44,
   },
-  nowTrainingSpacer: {
-    flex: 1,
-  },
-  resumeText: {
-    fontSize: 13,
-  },
+  nowTrainingInner: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10 },
+  pulseDot: { width: 8, height: 8, borderRadius: 4 },
+  nowTrainingText: { fontSize: 13 },
+  resumeText: { fontSize: 13 },
 });

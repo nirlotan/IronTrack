@@ -1,31 +1,72 @@
-import { useCallback, useEffect, useRef, useState, memo } from 'react';
+/**
+ * Active Workout — the central interaction surface.
+ *
+ * iOS-native aesthetics with:
+ *   - Header: minimize / elapsed timer / discard, large editable title, finish CTA.
+ *   - Floating rest-timer ring overlay (Reanimated countdown).
+ *   - Per-exercise card showing smart progression suggestion + last-time numbers.
+ *   - Per-set row with set type chip (warmup/working/drop/failure), weight, reps, RPE stepper, complete check.
+ *   - Live PR detection vs `computePersonalRecords(sessions)`; PR bursts fire confetti-style toast.
+ *   - Plate calculator sheet (47.5kg → 2 × 20 + 2.5 + bar).
+ *   - Swipe-to-delete sets.
+ */
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
     Alert,
+    KeyboardAvoidingView,
+    Modal,
     Platform,
+    Pressable,
+    ScrollView,
     StyleSheet,
     Text,
     TextInput,
-    TouchableOpacity,
     View,
-    Modal,
-    Pressable,
 } from 'react-native';
-import Animated, { SlideInDown, SlideOutUp } from 'react-native-reanimated';
-import { MaterialIcons } from '@expo/vector-icons';
-import { ScrollView, Swipeable } from 'react-native-gesture-handler';
+import { Ionicons } from '@expo/vector-icons';
+import { Swipeable, RectButton } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import * as Haptics from 'expo-haptics';
-import { useTheme, ScreenBackground } from '../src/theme';
+import Animated, {
+    FadeIn,
+    FadeInDown,
+    FadeOut,
+    useAnimatedProps,
+    useSharedValue,
+    withTiming,
+    Easing,
+    type SharedValue,
+} from 'react-native-reanimated';
+import Svg, { Circle } from 'react-native-svg';
+
+import { useTheme, ScreenBackground, tokens } from '../src/theme';
 import { useTranslation } from '../src/i18n';
 import { useAppStore } from '../src/store/appStore';
 import { formatTimer, getExerciseName } from '../src/utils/helpers';
-import type { Exercise } from '../src/types';
+import {
+    Card,
+    PillButton,
+    SegmentedControl,
+    Badge,
+    ProgressRing,
+    ListRow,
+} from '../src/components/ios';
+import {
+    computePersonalRecords,
+    detectPRKinds,
+    suggestProgression,
+    estimate1RM,
+} from '../src/utils/algorithms';
+import type { SetRecord, SetType, PersonalRecord } from '../src/types';
 
-interface UndoState {
-    exIdx: number;
-    setIdx: number;
-}
+const AnimatedCircle = Animated.createAnimatedComponent(Circle);
+const SET_TYPES: Array<{ value: SetType; emoji: string; key: string }> = [
+    { value: 'warmup', emoji: '🔥', key: 'set_type_warmup' },
+    { value: 'working', emoji: '💪', key: 'set_type_working' },
+    { value: 'drop', emoji: '⬇️', key: 'set_type_drop' },
+    { value: 'failure', emoji: '💀', key: 'set_type_failure' },
+];
 
 export default function ActiveWorkoutScreen() {
     const { colors } = useTheme();
@@ -35,666 +76,856 @@ export default function ActiveWorkoutScreen() {
 
     const activeWorkout = useAppStore((s) => s.activeWorkout);
     const exercises = useAppStore((s) => s.exercises);
+    const sessions = useAppStore((s) => s.sessions);
     const restTimerSeconds = useAppStore((s) => s.restTimerSeconds);
     const autoStartRestTimer = useAppStore((s) => s.autoStartRestTimer);
+
     const renameActiveWorkout = useAppStore((s) => s.renameActiveWorkout);
     const updateSet = useAppStore((s) => s.updateSet);
+    const updateSetRPE = useAppStore((s) => s.updateSetRPE);
+    const updateSetType = useAppStore((s) => s.updateSetType);
     const addSetToExercise = useAppStore((s) => s.addSetToExercise);
     const removeSet = useAppStore((s) => s.removeSet);
-    const addExerciseToWorkout = useAppStore((s) => s.addExerciseToWorkout);
     const toggleSetComplete = useAppStore((s) => s.toggleSetComplete);
+    const moveExerciseInWorkout = useAppStore((s) => s.moveExerciseInWorkout);
     const finishWorkout = useAppStore((s) => s.finishWorkout);
     const discardWorkout = useAppStore((s) => s.discardWorkout);
-    const updateCustomExercise = useAppStore((s) => s.updateCustomExercise);
 
     const [elapsed, setElapsed] = useState(0);
-    const [restTimeLeft, setRestTimeLeft] = useState(0);
-    const [isResting, setIsResting] = useState(false);
-    const [undoState, setUndoState] = useState<UndoState | null>(null);
-    const [editingExercise, setEditingExercise] = useState<Exercise | null>(null);
-    const [newExerciseName, setNewExerciseName] = useState('');
-    
-    const restIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-    const undoTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-    const lastTitleTapRef = useRef<{ id: string; time: number } | null>(null);
+    const [restLeft, setRestLeft] = useState(0);
+    const [resting, setResting] = useState(false);
+    const restRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-    useEffect(() => {
-        if (!activeWorkout) return;
+    const [prToast, setPrToast] = useState<{ kinds: Array<'1rm' | 'weight' | 'reps' | 'volume'>; exerciseName: string } | null>(null);
+    const prToastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-        if (!activeWorkout.startedAt) {
-            return;
+    const [rpeSheet, setRpeSheet] = useState<{ exIdx: number; setIdx: number; current: number } | null>(null);
+    const [typeSheet, setTypeSheet] = useState<{ exIdx: number; setIdx: number; current: SetType } | null>(null);
+    const [plateSheet, setPlateSheet] = useState<{ weight: number } | null>(null);
+
+    // ─── Prior records snapshot (for live PR detection) ─────────────
+    const priorRecords = useMemo<Record<string, PersonalRecord>>(
+        () => computePersonalRecords(sessions),
+        [sessions]
+    );
+
+    // ─── Per-exercise progression suggestions from history ──────────
+    const suggestions = useMemo(() => {
+        if (!activeWorkout) return {} as Record<string, ReturnType<typeof suggestProgression>>;
+        const out: Record<string, ReturnType<typeof suggestProgression>> = {};
+        for (const ex of activeWorkout.exercises) {
+            const history: Array<{ weight: number | null; reps: number | null; rpe?: number }> = [];
+            for (const session of sessions) {
+                for (const sx of session.exercises) {
+                    if (sx.exerciseId !== ex.exerciseId) continue;
+                    for (const s of sx.sets) {
+                        if (s.isCompleted && s.setType !== 'warmup') {
+                            history.push({ weight: s.weight, reps: s.reps, rpe: s.rpe });
+                        }
+                    }
+                }
+            }
+            out[ex.exerciseId] = suggestProgression(history);
         }
+        return out;
+    }, [activeWorkout, sessions]);
 
-        const interval = setInterval(() => {
+    // ─── Elapsed timer ──────────────────────────────────────────────
+    useEffect(() => {
+        if (!activeWorkout?.startedAt) return;
+        const id = setInterval(() => {
             setElapsed(Math.floor((Date.now() - activeWorkout.startedAt!) / 1000));
         }, 1000);
+        return () => clearInterval(id);
+    }, [activeWorkout?.startedAt]);
 
-        return () => clearInterval(interval);
-    }, [activeWorkout, router]);
+    // ─── Rest timer ─────────────────────────────────────────────────
+    const restProgress = useSharedValue(0);
 
-    useEffect(() => {
-        return () => {
-            if (restIntervalRef.current) {
-                clearInterval(restIntervalRef.current);
-            }
-            if (undoTimeoutRef.current) {
-                clearTimeout(undoTimeoutRef.current);
-            }
-        };
-    }, []);
+    const stopRest = useCallback(() => {
+        if (restRef.current) clearInterval(restRef.current);
+        restRef.current = null;
+        setResting(false);
+        setRestLeft(0);
+        restProgress.value = withTiming(0, { duration: 200 });
+    }, [restProgress]);
 
-    const startRestTimer = useCallback(() => {
-        if (restIntervalRef.current) {
-            clearInterval(restIntervalRef.current);
-        }
-        setRestTimeLeft(restTimerSeconds);
-        setIsResting(true);
-
-        restIntervalRef.current = setInterval(() => {
-            setRestTimeLeft((prev) => {
-                if (prev <= 1) {
-                    if (restIntervalRef.current) {
-                        clearInterval(restIntervalRef.current);
+    const startRest = useCallback(
+        (seconds = restTimerSeconds) => {
+            if (restRef.current) clearInterval(restRef.current);
+            const total = Math.max(1, seconds);
+            setRestLeft(total);
+            setResting(true);
+            restProgress.value = 0;
+            restProgress.value = withTiming(1, { duration: total * 1000, easing: Easing.linear });
+            restRef.current = setInterval(() => {
+                setRestLeft((prev) => {
+                    if (prev <= 1) {
+                        if (restRef.current) clearInterval(restRef.current);
+                        restRef.current = null;
+                        setResting(false);
+                        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                        return 0;
                     }
-                    setIsResting(false);
-                    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-                    return 0;
-                }
-                return prev - 1;
-            });
-        }, 1000);
-    }, [restTimerSeconds]);
+                    return prev - 1;
+                });
+            }, 1000);
+        },
+        [restTimerSeconds, restProgress]
+    );
 
-    const stopRestTimer = useCallback(() => {
-        if (restIntervalRef.current) {
-            clearInterval(restIntervalRef.current);
-        }
-        setIsResting(false);
-        setRestTimeLeft(0);
+    useEffect(
+        () => () => {
+            if (restRef.current) clearInterval(restRef.current);
+            if (prToastTimer.current) clearTimeout(prToastTimer.current);
+        },
+        []
+    );
+
+    const fireToast = useCallback((kinds: Array<'1rm' | 'weight' | 'reps' | 'volume'>, exerciseName: string) => {
+        setPrToast({ kinds, exerciseName });
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        if (prToastTimer.current) clearTimeout(prToastTimer.current);
+        prToastTimer.current = setTimeout(() => setPrToast(null), 3500);
     }, []);
 
-    const showUndoToast = useCallback((exIdx: number, setIdx: number) => {
-        setUndoState({ exIdx, setIdx });
-        if (undoTimeoutRef.current) {
-            clearTimeout(undoTimeoutRef.current);
-        }
-        undoTimeoutRef.current = setTimeout(() => setUndoState(null), 3500);
-    }, []);
-
+    // ─── Set completion (with live PR detection) ────────────────────
     const handleComplete = useCallback(
         (exIdx: number, setIdx: number) => {
             if (!activeWorkout) return;
-            const currentSet = activeWorkout.exercises[exIdx]?.sets[setIdx];
-            if (!currentSet) return;
+            const ex = activeWorkout.exercises[exIdx];
+            const s = ex?.sets[setIdx];
+            if (!s) return;
 
+            const willBeCompleted = !s.isCompleted;
             toggleSetComplete(exIdx, setIdx);
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
-            if (!currentSet.isCompleted) {
-                showUndoToast(exIdx, setIdx);
-                if (autoStartRestTimer) {
-                    startRestTimer();
+            if (willBeCompleted) {
+                const kinds = detectPRKinds({ ...s, isCompleted: true }, priorRecords[ex.exerciseId]);
+                if (kinds.length > 0 && s.setType !== 'warmup') {
+                    const info = exercises.find((e) => e.id === ex.exerciseId);
+                    fireToast(kinds, info ? getExerciseName(info, t, language) : ex.exerciseId);
+                }
+                if (autoStartRestTimer && s.setType !== 'warmup') {
+                    startRest();
                 }
             }
         },
-        [activeWorkout, toggleSetComplete, showUndoToast, autoStartRestTimer, startRestTimer]
+        [activeWorkout, toggleSetComplete, priorRecords, exercises, t, language, autoStartRestTimer, startRest, fireToast]
     );
 
-    const handleUndo = useCallback(() => {
-        if (!undoState) return;
-        toggleSetComplete(undoState.exIdx, undoState.setIdx);
-        setUndoState(null);
-        stopRestTimer();
-    }, [undoState, toggleSetComplete, stopRestTimer]);
-
     const handleFinish = useCallback(() => {
-        if (!activeWorkout) return;
-
         const onConfirm = () => {
             finishWorkout();
-            stopRestTimer();
+            stopRest();
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
             router.replace('/(tabs)');
         };
-
-        if (Platform.OS === 'web') {
-            onConfirm();
-            return;
-        }
-
+        if (Platform.OS === 'web') return onConfirm();
         Alert.alert(t('finish_workout'), '', [
             { text: t('cancel'), style: 'cancel' },
             { text: t('finish'), onPress: onConfirm },
         ]);
-    }, [activeWorkout, finishWorkout, router, stopRestTimer, t]);
+    }, [finishWorkout, router, stopRest, t]);
 
     const handleDiscard = useCallback(() => {
-        if (!activeWorkout) return;
-
         const onConfirm = () => {
             discardWorkout();
-            stopRestTimer();
+            stopRest();
             router.replace('/(tabs)');
         };
-
-        if (Platform.OS === 'web') {
-            onConfirm();
-            return;
-        }
-
+        if (Platform.OS === 'web') return onConfirm();
         Alert.alert(t('discard_workout'), t('discard_confirm'), [
             { text: t('cancel'), style: 'cancel' },
             { text: t('delete'), style: 'destructive', onPress: onConfirm },
         ]);
-    }, [activeWorkout, discardWorkout, router, stopRestTimer, t]);
+    }, [discardWorkout, router, stopRest, t]);
 
-    const handleAddExercise = useCallback(() => {
-        router.push('/select-exercise');
-    }, [router]);
+    if (!activeWorkout) return null;
 
-    const handleTitlePress = (exercise: Exercise) => {
-        if (!exercise.isCustom) return;
-        const now = Date.now();
-        if (lastTitleTapRef.current?.id === exercise.id && (now - lastTitleTapRef.current.time) < 300) {
-            // Double tap
-            setEditingExercise(exercise);
-            setNewExerciseName(getExerciseName(exercise, t, language));
-            lastTitleTapRef.current = null;
-        } else {
-            lastTitleTapRef.current = { id: exercise.id, time: now };
-        }
-    };
-
-    const handleRenameExercise = () => {
-        if (editingExercise && newExerciseName.trim()) {
-            updateCustomExercise(editingExercise.id, newExerciseName.trim(), language);
-            setEditingExercise(null);
-            setNewExerciseName('');
-        }
-    };
-
-    if (!activeWorkout) {
-        return null;
-    }
+    // ─── Workout-wide stats (live) ──────────────────────────────────
+    const liveVolume = activeWorkout.exercises.reduce((sum, ex) => {
+        return sum + ex.sets.reduce((s2, st) => {
+            if (!st.isCompleted || !st.weight || !st.reps || st.setType === 'warmup') return s2;
+            return s2 + st.weight * st.reps;
+        }, 0);
+    }, 0);
+    const totalSets = activeWorkout.exercises.reduce((s, ex) => s + ex.sets.length, 0);
+    const completedSets = activeWorkout.exercises.reduce(
+        (s, ex) => s + ex.sets.filter((st) => st.isCompleted).length,
+        0
+    );
 
     return (
-        <ScreenBackground style={styles.container}>
-            <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
-                <View style={styles.headerTopRow}>
-                    <TouchableOpacity onPress={() => router.back()} accessibilityLabel={t('minimize_workout')}>
-                        <MaterialIcons name="keyboard-arrow-down" size={30} color={colors.onSurface} />
-                    </TouchableOpacity>
-                    <Text style={[styles.timerText, { color: colors.outlineVariant, fontFamily: fontRegular }]}>
-                        {formatTimer(elapsed)}
-                    </Text>
-                    <TouchableOpacity onPress={handleDiscard} accessibilityLabel={t('discard_workout')}>
-                        <MaterialIcons name="close" size={24} color={colors.error} />
-                    </TouchableOpacity>
+        <ScreenBackground style={{ flex: 1 }}>
+            {/* ─── Header ──────────────────────────────────────────────── */}
+            <View style={[styles.header, { paddingTop: insets.top + 6 }]}>
+                <View style={styles.headerRow}>
+                    <Pressable onPress={() => router.back()} hitSlop={10} style={styles.iconBtn}>
+                        <Ionicons name="chevron-down" size={26} color={colors.onSurface} />
+                    </Pressable>
+                    <View style={styles.headerCenter}>
+                        <Text style={[styles.elapsed, { color: colors.primary, fontFamily: fontBold }]}>
+                            {formatTimer(elapsed)}
+                        </Text>
+                        <Text style={[styles.headerSub, { color: colors.onSurfaceVariant, fontFamily: fontRegular }]}>
+                            {completedSets}/{totalSets} {t('sets').toLowerCase()} · {Math.round(liveVolume)}kg
+                        </Text>
+                    </View>
+                    <Pressable onPress={handleDiscard} hitSlop={10} style={styles.iconBtn}>
+                        <Ionicons name="close" size={24} color={colors.error} />
+                    </Pressable>
                 </View>
-
-                <View style={styles.headerMainRow}>
+                <View style={styles.titleRow}>
                     <TextInput
-                        style={[styles.nameInput, { color: colors.onSurface, fontFamily: fontBold }]}
+                        style={[styles.titleInput, { color: colors.onSurface, fontFamily: fontBold }]}
                         value={activeWorkout.name}
                         onChangeText={renameActiveWorkout}
                         placeholder={t('new_workout')}
-                        placeholderTextColor={colors.outlineVariant}
+                        placeholderTextColor={colors.outline}
                         textAlign={isRTL ? 'right' : 'left'}
                     />
-                    <TouchableOpacity
-                        style={[styles.finishBtn, { backgroundColor: colors.primaryContainer }]}
+                    <Pressable
                         onPress={handleFinish}
+                        style={({ pressed }) => [
+                            styles.finishBtn,
+                            { backgroundColor: colors.primary, opacity: pressed ? 0.85 : 1 },
+                        ]}
                     >
-                        <Text style={[styles.finishBtnText, { color: colors.onPrimaryContainer, fontFamily: fontBold }]}>
+                        <Text style={[styles.finishText, { color: colors.onPrimary, fontFamily: fontBold }]}>
                             {t('finish')}
                         </Text>
-                    </TouchableOpacity>
+                    </Pressable>
                 </View>
             </View>
 
-            {isResting && (
-                <View style={[styles.restTimerCard, { backgroundColor: colors.surfaceContainerLow }]}>
-                    <Text style={[styles.restTimerTitle, { color: colors.outlineVariant, fontFamily: fontBold }]}>
-                        {t('rest_timer')}
-                    </Text>
-                    <Text style={[styles.restTimerValue, { color: colors.primary, fontFamily: fontBold }]}>
-                        {formatTimer(restTimeLeft)}
-                    </Text>
-                    <TouchableOpacity
-                        style={[styles.skipBtn, { backgroundColor: colors.surfaceContainerHighest }]}
-                        onPress={stopRestTimer}
-                    >
-                        <Text style={[styles.skipBtnText, { color: colors.error, fontFamily: fontBold }]}>{t('skip')}</Text>
-                    </TouchableOpacity>
-                </View>
-            )}
-
-            <ScrollView
-                style={styles.scroll}
-                contentContainerStyle={{ paddingBottom: 128, paddingHorizontal: 16 }}
-                showsVerticalScrollIndicator={false}
-                scrollEventThrottle={16}
-                nestedScrollEnabled={true}
+            {/* ─── Body ────────────────────────────────────────────────── */}
+            <KeyboardAvoidingView
+                style={{ flex: 1 }}
+                behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+                keyboardVerticalOffset={insets.top + 80}
             >
-                {activeWorkout.exercises.map((exercise, exIdx) => {
-                    const exerciseInfo = exercises.find((item) => item.id === exercise.exerciseId);
-                    if (!exerciseInfo) return null;
+                <ScrollView
+                    contentContainerStyle={{
+                        paddingHorizontal: tokens.spacing.lg,
+                        paddingTop: tokens.spacing.sm,
+                        paddingBottom: insets.bottom + 200,
+                        gap: tokens.spacing.md,
+                    }}
+                    showsVerticalScrollIndicator={false}
+                    keyboardShouldPersistTaps="handled"
+                >
+                    {activeWorkout.exercises.map((exercise, exIdx) => {
+                        const info = exercises.find((e) => e.id === exercise.exerciseId);
+                        if (!info) return null;
+                        const sg = suggestions[exercise.exerciseId];
+                        const prevRecord = priorRecords[exercise.exerciseId];
+                        const canMoveUp = exIdx > 0;
+                        const canMoveDown = exIdx < activeWorkout.exercises.length - 1;
+                        const onMove = (delta: number) => {
+                            moveExerciseInWorkout(exIdx, exIdx + delta);
+                            Haptics.selectionAsync();
+                        };
+                        return (
+                            <Animated.View key={`${exercise.exerciseId}-${exIdx}`} entering={FadeInDown.delay(exIdx * 60).springify()}>
+                                <Card>
+                                    {/* Title + PR badge */}
+                                    <View style={{ flexDirection: isRTL ? 'row-reverse' : 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                                        <Text style={{ color: colors.onSurface, fontFamily: fontBold, fontSize: 18, flex: 1 }}>
+                                            {getExerciseName(info, t, language)}
+                                        </Text>
+                                        <View style={{ flexDirection: isRTL ? 'row-reverse' : 'row', alignItems: 'center', gap: 4, marginHorizontal: 6 }}>
+                                            <Pressable
+                                                onPress={() => onMove(-1)}
+                                                disabled={!canMoveUp}
+                                                hitSlop={8}
+                                                accessibilityRole="button"
+                                                accessibilityLabel="Move exercise up"
+                                                style={{ padding: 4, opacity: canMoveUp ? 1 : 0.25 }}
+                                            >
+                                                <Ionicons name="chevron-up" size={20} color={colors.onSurfaceVariant} />
+                                            </Pressable>
+                                            <Pressable
+                                                onPress={() => onMove(1)}
+                                                disabled={!canMoveDown}
+                                                hitSlop={8}
+                                                accessibilityRole="button"
+                                                accessibilityLabel="Move exercise down"
+                                                style={{ padding: 4, opacity: canMoveDown ? 1 : 0.25 }}
+                                            >
+                                                <Ionicons name="chevron-down" size={20} color={colors.onSurfaceVariant} />
+                                            </Pressable>
+                                        </View>
+                                        {prevRecord ? (
+                                            <Badge label={`PR ${prevRecord.bestWeight}kg`} color={colors.tertiary} />
+                                        ) : null}
+                                    </View>
 
-                    return (
-                        <View key={`${exercise.exerciseId}-${exIdx}`} style={styles.exerciseCard}>
-                            <TouchableOpacity activeOpacity={0.8} onPress={() => handleTitlePress(exerciseInfo)}>
-                                <Text style={[styles.exerciseTitle, { color: colors.onSurface, fontFamily: fontBold, textAlign: isRTL ? 'right' : 'left' }]}>
-                                    {getExerciseName(exerciseInfo, t, language)}
-                                </Text>
-                            </TouchableOpacity>
+                                    {/* Suggestion */}
+                                    {sg ? (
+                                        <View
+                                            style={{
+                                                flexDirection: isRTL ? 'row-reverse' : 'row',
+                                                alignItems: 'center',
+                                                gap: 10,
+                                                backgroundColor: colors.fillTertiary,
+                                                borderRadius: tokens.radius.md,
+                                                paddingHorizontal: 12,
+                                                paddingVertical: 10,
+                                                marginBottom: 12,
+                                            }}
+                                        >
+                                            <Ionicons name="sparkles" size={16} color={colors.primary} />
+                                            <Text style={{ color: colors.onSurface, fontFamily: fontRegular, fontSize: 13, flex: 1 }}>
+                                                {sg.reason === 'first_time'
+                                                    ? t('suggestion_first_time')
+                                                    : sg.reason === 'hold'
+                                                        ? t('suggestion_hold')
+                                                        : sg.reason === 'increase_weight'
+                                                            ? `${t('suggestion_increase_weight')}  ${sg.weight}kg × ${sg.reps}`
+                                                            : `${t('suggestion_increase_reps')}  ${sg.weight}kg × ${sg.reps}`}
+                                            </Text>
+                                        </View>
+                                    ) : null}
 
-                            {exercise.sets.map((set, setIdx) => {
-...
-                </View>
-            )}
+                                    {/* Column header */}
+                                    <View style={{ flexDirection: isRTL ? 'row-reverse' : 'row', alignItems: 'center', paddingHorizontal: 4, marginBottom: 6 }}>
+                                        <Text style={[styles.colHead, { color: colors.outline, fontFamily: fontBold, width: 30 }]}>#</Text>
+                                        <Text style={[styles.colHead, { color: colors.outline, fontFamily: fontBold, flex: 1, textAlign: 'center' }]}>{t('weight_kg')}</Text>
+                                        <Text style={[styles.colHead, { color: colors.outline, fontFamily: fontBold, flex: 1, textAlign: 'center' }]}>{t('reps')}</Text>
+                                        <Text style={[styles.colHead, { color: colors.outline, fontFamily: fontBold, width: 50, textAlign: 'center' }]}>{t('rpe')}</Text>
+                                        <View style={{ width: 38 }} />
+                                    </View>
 
-            <Modal
-                visible={!!editingExercise}
-                transparent
-                animationType="fade"
-                onRequestClose={() => setEditingExercise(null)}
-            >
-                <Pressable style={styles.modalOverlay} onPress={() => setEditingExercise(null)}>
-                    <Animated.View
-                        entering={SlideInDown}
-                        exiting={SlideOutUp}
-                        style={[
-                            styles.modalContent,
-                            {
-                                backgroundColor: colors.surfaceContainer,
-                                paddingTop: insets.top + 24
-                            }
-                        ]}
-                    >
-                        <Pressable onPress={() => { }}>
-                            <Text
-                                style={[
-                                    styles.modalTitle,
-                                    { color: colors.onSurface, textAlign: isRTL ? 'right' : 'left', fontFamily: fontBold },
-                                ]}
+                                    {exercise.sets.map((set, setIdx) => (
+                                        <SetRow
+                                            key={set.id}
+                                            exIdx={exIdx}
+                                            setIdx={setIdx}
+                                            set={set}
+                                            isRTL={isRTL}
+                                            onChangeWeight={(v) => updateSet(exIdx, setIdx, 'weight', v)}
+                                            onChangeReps={(v) => updateSet(exIdx, setIdx, 'reps', v)}
+                                            onComplete={() => handleComplete(exIdx, setIdx)}
+                                            onDelete={() => removeSet(exIdx, setIdx)}
+                                            onOpenRPE={() => setRpeSheet({ exIdx, setIdx, current: set.rpe ?? 7 })}
+                                            onOpenType={() => setTypeSheet({ exIdx, setIdx, current: set.setType ?? 'working' })}
+                                            onOpenPlate={(weight) => setPlateSheet({ weight })}
+                                        />
+                                    ))}
+
+                                    <View style={{ height: 6 }} />
+                                    <PillButton
+                                        title={`+ ${t('add_set')}`}
+                                        variant="ghost"
+                                        fullWidth
+                                        onPress={() => addSetToExercise(exIdx)}
+                                    />
+                                </Card>
+                            </Animated.View>
+                        );
+                    })}
+
+                    <PillButton
+                        title={t('add_exercise')}
+                        icon="add-circle"
+                        variant="secondary"
+                        fullWidth
+                        onPress={() => router.push('/select-exercise')}
+                    />
+                </ScrollView>
+            </KeyboardAvoidingView>
+
+            {/* ─── Rest timer floating overlay ─────────────────────────── */}
+            {resting ? (
+                <Animated.View
+                    entering={FadeIn}
+                    exiting={FadeOut}
+                    style={[
+                        styles.restOverlay,
+                        { bottom: insets.bottom + 24, backgroundColor: colors.surfaceContainerHigh, borderColor: colors.separator },
+                    ]}
+                >
+                    <RestRing seconds={restLeft} total={restTimerSeconds} progress={restProgress} />
+                    <View style={{ flex: 1, marginLeft: 14 }}>
+                        <Text style={{ color: colors.onSurfaceVariant, fontFamily: fontBold, fontSize: 11, letterSpacing: 0.6, textTransform: 'uppercase' }}>
+                            {t('rest_timer')}
+                        </Text>
+                        <Text style={{ color: colors.onSurface, fontFamily: fontBold, fontSize: 28 }}>
+                            {formatTimer(restLeft)}
+                        </Text>
+                    </View>
+                    <Pressable onPress={() => startRest(restLeft + 15)} style={[styles.restPill, { backgroundColor: colors.fillTertiary }]}>
+                        <Text style={{ color: colors.onSurface, fontFamily: fontBold, fontSize: 12 }}>+15s</Text>
+                    </Pressable>
+                    <Pressable onPress={stopRest} style={[styles.restPill, { backgroundColor: colors.error }]}>
+                        <Text style={{ color: colors.onError, fontFamily: fontBold, fontSize: 12 }}>{t('skip')}</Text>
+                    </Pressable>
+                </Animated.View>
+            ) : null}
+
+            {/* ─── PR celebration toast ────────────────────────────────── */}
+            {prToast ? (
+                <Animated.View
+                    entering={FadeInDown.springify()}
+                    exiting={FadeOut}
+                    style={[
+                        styles.prToast,
+                        { top: insets.top + 80, backgroundColor: colors.tertiary },
+                    ]}
+                >
+                    <Text style={{ fontSize: 28 }}>🏆</Text>
+                    <View style={{ flex: 1, marginLeft: 10 }}>
+                        <Text style={{ color: colors.onTertiary ?? '#000', fontFamily: fontBold, fontSize: 14 }}>
+                            {t('pr_new_record')}
+                        </Text>
+                        <Text style={{ color: colors.onTertiary ?? '#000', fontFamily: fontRegular, fontSize: 12 }} numberOfLines={1}>
+                            {prToast.exerciseName} · {prToast.kinds.map((k) => t(`pr_${k}` as any)).join(' · ')}
+                        </Text>
+                    </View>
+                </Animated.View>
+            ) : null}
+
+            {/* ─── RPE sheet ───────────────────────────────────────────── */}
+            <Modal visible={!!rpeSheet} transparent animationType="fade" onRequestClose={() => setRpeSheet(null)}>
+                <Pressable style={styles.sheetBackdrop} onPress={() => setRpeSheet(null)}>
+                    <Pressable style={[styles.sheet, { backgroundColor: colors.surfaceContainer }]} onPress={() => { }}>
+                        <Text style={{ color: colors.onSurface, fontFamily: fontBold, fontSize: 18, marginBottom: 6 }}>{t('rpe')}</Text>
+                        <Text style={{ color: colors.onSurfaceVariant, fontFamily: fontRegular, fontSize: 13, marginBottom: 16 }}>
+                            {t('rpe_hint')}
+                        </Text>
+                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, justifyContent: 'center' }}>
+                            {[5, 6, 7, 7.5, 8, 8.5, 9, 9.5, 10].map((v) => {
+                                const active = rpeSheet?.current === v;
+                                return (
+                                    <Pressable
+                                        key={v}
+                                        onPress={() => {
+                                            if (rpeSheet) updateSetRPE(rpeSheet.exIdx, rpeSheet.setIdx, v);
+                                            setRpeSheet(null);
+                                            Haptics.selectionAsync();
+                                        }}
+                                        style={{
+                                            width: 64,
+                                            height: 64,
+                                            borderRadius: 16,
+                                            alignItems: 'center',
+                                            justifyContent: 'center',
+                                            backgroundColor: active ? colors.primary : colors.fillTertiary,
+                                        }}
+                                    >
+                                        <Text style={{ color: active ? colors.onPrimary : colors.onSurface, fontFamily: fontBold, fontSize: 20 }}>
+                                            {v}
+                                        </Text>
+                                    </Pressable>
+                                );
+                            })}
+                        </View>
+                        {rpeSheet?.current != null ? (
+                            <Pressable
+                                style={{ marginTop: 16, alignSelf: 'center' }}
+                                onPress={() => {
+                                    if (rpeSheet) updateSetRPE(rpeSheet.exIdx, rpeSheet.setIdx, undefined);
+                                    setRpeSheet(null);
+                                }}
                             >
-                                {t('edit_exercise' as any)}
-                            </Text>
+                                <Text style={{ color: colors.error, fontFamily: fontBold, fontSize: 14 }}>{t('clear')}</Text>
+                            </Pressable>
+                        ) : null}
+                    </Pressable>
+                </Pressable>
+            </Modal>
 
-                            <TextInput
-                                style={[
-                                    styles.modalInput,
-                                    { backgroundColor: colors.surfaceContainerLow, color: colors.onSurface, textAlign: isRTL ? 'right' : 'left' },
-                                ]}
-                                placeholder={t('exercise_name')}
-                                placeholderTextColor={colors.outlineVariant}
-                                value={newExerciseName}
-                                onChangeText={setNewExerciseName}
-                                autoFocus
-                                returnKeyType="done"
-                                onSubmitEditing={handleRenameExercise}
-                            />
+            {/* ─── Set type sheet ──────────────────────────────────────── */}
+            <Modal visible={!!typeSheet} transparent animationType="fade" onRequestClose={() => setTypeSheet(null)}>
+                <Pressable style={styles.sheetBackdrop} onPress={() => setTypeSheet(null)}>
+                    <Pressable style={[styles.sheet, { backgroundColor: colors.surfaceContainer }]} onPress={() => { }}>
+                        <Text style={{ color: colors.onSurface, fontFamily: fontBold, fontSize: 18, marginBottom: 16 }}>{t('set_type')}</Text>
+                        <View style={{ gap: 8 }}>
+                            {SET_TYPES.map((opt) => {
+                                const active = typeSheet?.current === opt.value;
+                                return (
+                                    <Pressable
+                                        key={opt.value}
+                                        onPress={() => {
+                                            if (typeSheet) updateSetType(typeSheet.exIdx, typeSheet.setIdx, opt.value);
+                                            setTypeSheet(null);
+                                            Haptics.selectionAsync();
+                                        }}
+                                        style={{
+                                            flexDirection: 'row',
+                                            alignItems: 'center',
+                                            gap: 12,
+                                            padding: 14,
+                                            borderRadius: 14,
+                                            backgroundColor: active ? colors.primaryContainer : colors.fillTertiary,
+                                        }}
+                                    >
+                                        <Text style={{ fontSize: 22 }}>{opt.emoji}</Text>
+                                        <Text style={{ color: colors.onSurface, fontFamily: fontBold, fontSize: 15, flex: 1 }}>
+                                            {t(opt.key as any)}
+                                        </Text>
+                                        {active ? <Ionicons name="checkmark-circle" size={20} color={colors.primary} /> : null}
+                                    </Pressable>
+                                );
+                            })}
+                        </View>
+                    </Pressable>
+                </Pressable>
+            </Modal>
 
-                            <View style={styles.modalActions}>
-                                <TouchableOpacity
-                                    style={[styles.modalBtn, { backgroundColor: colors.surfaceContainerHighest }]}
-                                    onPress={() => setEditingExercise(null)}
-                                >
-                                    <Text style={[styles.modalBtnText, { color: colors.onSurface, fontFamily: fontBold }]}>
-                                        {t('cancel')}
-                                    </Text>
-                                </TouchableOpacity>
-                                <TouchableOpacity
-                                    style={[styles.modalBtn, { backgroundColor: colors.primaryContainer }]}
-                                    onPress={handleRenameExercise}
-                                >
-                                    <Text style={[styles.modalBtnText, { color: colors.onPrimaryContainer, fontFamily: fontBold }]}>
-                                        {t('save')}
-                                    </Text>
-                                </TouchableOpacity>
-                            </View>
-                        </Pressable>
-                    </Animated.View>
+            {/* ─── Plate calculator sheet ──────────────────────────────── */}
+            <Modal visible={!!plateSheet} transparent animationType="fade" onRequestClose={() => setPlateSheet(null)}>
+                <Pressable style={styles.sheetBackdrop} onPress={() => setPlateSheet(null)}>
+                    <Pressable style={[styles.sheet, { backgroundColor: colors.surfaceContainer }]} onPress={() => { }}>
+                        <Text style={{ color: colors.onSurface, fontFamily: fontBold, fontSize: 18, marginBottom: 4 }}>
+                            {t('plate_calculator')}
+                        </Text>
+                        <Text style={{ color: colors.onSurfaceVariant, fontFamily: fontRegular, fontSize: 13, marginBottom: 16 }}>
+                            {plateSheet?.weight ?? 0}kg · {t('per_side')}
+                        </Text>
+                        {plateSheet ? <PlateBreakdown weight={plateSheet.weight} /> : null}
+                    </Pressable>
                 </Pressable>
             </Modal>
         </ScreenBackground>
     );
 }
 
-const styles = StyleSheet.create({
-...
-    undoAction: {
-        fontSize: 13,
-    },
-    modalOverlay: {
-        flex: 1,
-        justifyContent: 'flex-start',
-        backgroundColor: 'rgba(0,0,0,0.6)',
-    },
-    modalContent: {
-        borderBottomLeftRadius: 20,
-        borderBottomRightRadius: 20,
-        padding: 24,
-        paddingBottom: 40,
-    },
-    modalTitle: {
-        fontSize: 20,
-        textTransform: 'uppercase',
-        letterSpacing: -0.5,
-        marginBottom: 20,
-    },
-    modalInput: {
-        borderRadius: 8,
-        paddingHorizontal: 16,
-        paddingVertical: 14,
-        fontSize: 16,
-        marginBottom: 20,
-    },
-    modalActions: {
-        flexDirection: 'row',
-        gap: 12,
-    },
-    modalBtn: {
-        flex: 1,
-        borderRadius: 8,
-        paddingVertical: 16,
-        alignItems: 'center',
-    },
-    modalBtnText: {
-        fontSize: 14,
-        textTransform: 'uppercase',
-        letterSpacing: 0.5,
-    },
-});
-                                const deleteAction = () => (
-                                    <View style={[styles.deleteAction, { backgroundColor: colors.error }]}>
-                                        <MaterialIcons name="delete" size={20} color={colors.onError} />
-                                    </View>
-                                );
+// ─── Set row ──────────────────────────────────────────────────────
+function SetRow({
+    exIdx,
+    setIdx,
+    set,
+    isRTL,
+    onChangeWeight,
+    onChangeReps,
+    onComplete,
+    onDelete,
+    onOpenRPE,
+    onOpenType,
+    onOpenPlate,
+}: {
+    exIdx: number;
+    setIdx: number;
+    set: SetRecord;
+    isRTL: boolean;
+    onChangeWeight: (v: number | null) => void;
+    onChangeReps: (v: number | null) => void;
+    onComplete: () => void;
+    onDelete: () => void;
+    onOpenRPE: () => void;
+    onOpenType: () => void;
+    onOpenPlate: (weight: number) => void;
+}) {
+    const { colors } = useTheme();
+    const { fontBold, t } = useTranslation();
+    const setType: SetType = set.setType ?? 'working';
+    const typeMeta = SET_TYPES.find((s) => s.value === setType)!;
 
-                                const swipeProps = isRTL
-                                    ? {
-                                        renderLeftActions: deleteAction,
-                                        onSwipeableLeftOpen: () => removeSet(exIdx, setIdx),
-                                    }
-                                    : {
-                                        renderRightActions: deleteAction,
-                                        onSwipeableRightOpen: () => removeSet(exIdx, setIdx),
-                                    };
+    const renderRight = () => (
+        <RectButton
+            style={{ width: 64, marginVertical: 4, borderRadius: tokens.radius.md, backgroundColor: colors.error, alignItems: 'center', justifyContent: 'center' }}
+            onPress={onDelete}
+        >
+            <Ionicons name="trash" size={18} color={colors.onError} />
+        </RectButton>
+    );
 
-                                return (
-                                    <Swipeable key={set.id} overshootLeft={false} overshootRight={false} {...swipeProps}>
-                                        <View
-                                            style={[
-                                                styles.setRow,
-                                                {
-                                                    backgroundColor: set.isCompleted
-                                                        ? colors.surfaceContainerLow
-                                                        : colors.surfaceContainerHighest,
-                                                    flexDirection: isRTL ? 'row-reverse' : 'row',
-                                                },
-                                            ]}
-                                        >
-                                            <Text style={[styles.setNumber, { color: colors.outlineVariant, fontFamily: fontBold }]}>
-                                                {t('set_num')} {setIdx + 1}
-                                            </Text>
+    const bg = set.isCompleted ? colors.primaryContainer : colors.fillTertiary;
 
-                                            <View style={styles.inputsRow}>
-                                                <TextInput
-                                                    style={[styles.input, { color: colors.onSurface, fontFamily: fontBold }]}
-                                                    value={set.weight?.toString() ?? ''}
-                                                    onChangeText={(value) => updateSet(exIdx, setIdx, 'weight', value || null)}
-                                                    placeholder={t('weight_kg')}
-                                                    placeholderTextColor={colors.outlineVariant}
-                                                    keyboardType="decimal-pad"
-                                                />
-                                                <TextInput
-                                                    style={[styles.input, { color: colors.onSurface, fontFamily: fontBold }]}
-                                                    value={set.reps?.toString() ?? ''}
-                                                    onChangeText={(value) => updateSet(exIdx, setIdx, 'reps', value)}
-                                                    placeholder={t('reps')}
-                                                    placeholderTextColor={colors.outlineVariant}
-                                                    keyboardType="default"
-                                                />
-                                            </View>
-
-                                            <View style={[styles.actionsCol, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
-                                                {!autoStartRestTimer && set.isCompleted && (
-                                                    <TouchableOpacity
-                                                        style={[styles.iconBtn, { backgroundColor: colors.surfaceContainer }]}
-                                                        onPress={startRestTimer}
-                                                        accessibilityLabel={t('start_rest_timer')}
-                                                    >
-                                                        <MaterialIcons name="schedule" size={16} color={colors.primary} />
-                                                    </TouchableOpacity>
-                                                )}
-                                                <TouchableOpacity
-                                                    style={[
-                                                        styles.checkBtn,
-                                                        {
-                                                            backgroundColor: set.isCompleted ? colors.primary : colors.surfaceContainer,
-                                                        },
-                                                    ]}
-                                                    onPress={() => handleComplete(exIdx, setIdx)}
-                                                >
-                                                    <MaterialIcons
-                                                        name="check"
-                                                        size={18}
-                                                        color={set.isCompleted ? colors.onPrimary : colors.outlineVariant}
-                                                    />
-                                                </TouchableOpacity>
-                                            </View>
-                                        </View>
-                                    </Swipeable>
-                                );
-                            })}
-
-                            <View style={styles.exerciseActions}>
-                                <TouchableOpacity
-                                    style={[styles.secondaryBtn, { backgroundColor: colors.surfaceContainerLow }]}
-                                    onPress={() => addSetToExercise(exIdx)}
-                                >
-                                    <Text style={[styles.secondaryBtnText, { color: colors.onSurface, fontFamily: fontBold }]}>
-                                        + {t('add_set')}
-                                    </Text>
-                                </TouchableOpacity>
-                            </View>
-                        </View>
-                    );
-                })}
-
-                <TouchableOpacity
-                    style={[styles.addExerciseBtn, { backgroundColor: colors.primaryContainer }]}
-                    onPress={handleAddExercise}
-                >
-                    <MaterialIcons name="add" size={18} color={colors.onPrimaryContainer} />
-                    <Text style={[styles.addExerciseText, { color: colors.onPrimaryContainer, fontFamily: fontBold }]}>
-                        {t('add_exercise')}
+    return (
+        <Swipeable
+            overshootLeft={false}
+            overshootRight={false}
+            {...(isRTL ? { renderLeftActions: renderRight } : { renderRightActions: renderRight })}
+        >
+            <View
+                style={[
+                    styles.setRow,
+                    {
+                        backgroundColor: bg,
+                        flexDirection: isRTL ? 'row-reverse' : 'row',
+                    },
+                ]}
+            >
+                <Pressable onPress={onOpenType} style={{ width: 30, alignItems: 'center' }}>
+                    <Text style={{ fontSize: 18 }}>{typeMeta.emoji}</Text>
+                    <Text style={{ color: colors.onSurfaceVariant, fontFamily: fontBold, fontSize: 10 }}>{setIdx + 1}</Text>
+                </Pressable>
+                <NumInput
+                    value={set.weight}
+                    onChange={onChangeWeight}
+                    onLongPress={set.weight ? () => onOpenPlate(set.weight!) : undefined}
+                />
+                <NumInput value={set.reps} onChange={onChangeReps} />
+                <Pressable onPress={onOpenRPE} style={[styles.rpePill, { backgroundColor: set.rpe != null ? colors.tertiary : 'transparent', borderColor: colors.outline }]}>
+                    <Text style={{ color: set.rpe != null ? (colors.onTertiary ?? '#000') : colors.onSurfaceVariant, fontFamily: fontBold, fontSize: 13 }}>
+                        {set.rpe ?? '—'}
                     </Text>
-                </TouchableOpacity>
-            </ScrollView>
-
-            {undoState && (
-                <View
-                    style={[
-                        styles.undoToast,
-                        {
-                            bottom: insets.bottom + 24,
-                            backgroundColor: colors.surfaceContainerHigh,
-                            borderColor: colors.outlineVariant,
-                        },
-                    ]}
+                </Pressable>
+                <Pressable
+                    onPress={onComplete}
+                    style={{
+                        width: 38,
+                        height: 38,
+                        borderRadius: 12,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        backgroundColor: set.isCompleted ? colors.primary : colors.surfaceContainerHigh,
+                    }}
                 >
-                    <Text style={[styles.undoText, { color: colors.onSurface, fontFamily: fontRegular }]}>
-                        {t('set_marked_complete')}
-                    </Text>
-                    <TouchableOpacity onPress={handleUndo}>
-                        <Text style={[styles.undoAction, { color: colors.primary, fontFamily: fontBold }]}>{t('undo')}</Text>
-                    </TouchableOpacity>
-                </View>
-            )}
-        </ScreenBackground>
+                    <Ionicons name={set.isCompleted ? 'checkmark' : 'ellipse-outline'} size={20} color={set.isCompleted ? colors.onPrimary : colors.outline} />
+                </Pressable>
+            </View>
+        </Swipeable>
     );
 }
 
+function NumInput({
+    value,
+    onChange,
+    onLongPress,
+}: {
+    value: number | null;
+    onChange: (v: number | null) => void;
+    onLongPress?: () => void;
+}) {
+    const { colors } = useTheme();
+    const { fontBold } = useTranslation();
+    const [text, setText] = useState(value?.toString() ?? '');
+    useEffect(() => {
+        setText(value?.toString() ?? '');
+    }, [value]);
+    return (
+        <Pressable onLongPress={onLongPress} style={{ flex: 1, marginHorizontal: 3 }}>
+            <TextInput
+                value={text}
+                onChangeText={(v) => {
+                    setText(v);
+                    if (v === '') onChange(null);
+                    else {
+                        const n = Number(v.replace(',', '.'));
+                        if (isFinite(n)) onChange(n);
+                    }
+                }}
+                keyboardType="decimal-pad"
+                placeholder="—"
+                placeholderTextColor={colors.outline}
+                selectTextOnFocus
+                style={{
+                    backgroundColor: colors.surface,
+                    borderRadius: 10,
+                    textAlign: 'center',
+                    paddingVertical: 8,
+                    color: colors.onSurface,
+                    fontFamily: fontBold,
+                    fontSize: 17,
+                }}
+            />
+        </Pressable>
+    );
+}
+
+// ─── Rest ring (animated SVG) ─────────────────────────────────────
+function RestRing({
+    seconds,
+    total,
+    progress,
+}: {
+    seconds: number;
+    total: number;
+    progress: SharedValue<number>;
+}) {
+    const { colors } = useTheme();
+    const size = 48;
+    const stroke = 4;
+    const r = (size - stroke) / 2;
+    const c = 2 * Math.PI * r;
+    const animatedProps = useAnimatedProps(() => ({
+        strokeDashoffset: c * progress.value,
+    }));
+    return (
+        <Svg width={size} height={size}>
+            <Circle cx={size / 2} cy={size / 2} r={r} stroke={colors.fillTertiary} strokeWidth={stroke} fill="none" />
+            <AnimatedCircle
+                cx={size / 2}
+                cy={size / 2}
+                r={r}
+                stroke={colors.primary}
+                strokeWidth={stroke}
+                fill="none"
+                strokeLinecap="round"
+                strokeDasharray={c}
+                animatedProps={animatedProps}
+                transform={`rotate(-90 ${size / 2} ${size / 2})`}
+            />
+        </Svg>
+    );
+}
+
+// ─── Plate breakdown (per side, standard 20kg bar) ────────────────
+function PlateBreakdown({ weight }: { weight: number }) {
+    const { colors } = useTheme();
+    const { fontBold, fontRegular, t } = useTranslation();
+    const BAR = 20;
+    const PLATES = [25, 20, 15, 10, 5, 2.5, 1.25];
+    const perSide = Math.max(0, (weight - BAR) / 2);
+    const breakdown: Array<{ plate: number; count: number }> = [];
+    let remaining = perSide;
+    for (const p of PLATES) {
+        const c = Math.floor(remaining / p);
+        if (c > 0) {
+            breakdown.push({ plate: p, count: c });
+            remaining = Math.round((remaining - c * p) * 100) / 100;
+        }
+    }
+
+    if (perSide <= 0) {
+        return (
+            <Text style={{ color: colors.onSurfaceVariant, fontFamily: fontRegular, fontSize: 14, textAlign: 'center', paddingVertical: 24 }}>
+                {t('only_bar')}
+            </Text>
+        );
+    }
+
+    return (
+        <View style={{ gap: 8 }}>
+            {breakdown.map((b) => (
+                <View
+                    key={b.plate}
+                    style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        backgroundColor: colors.fillTertiary,
+                        borderRadius: 12,
+                        paddingHorizontal: 16,
+                        paddingVertical: 14,
+                    }}
+                >
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                        <View style={{ width: 24, height: 40, borderRadius: 4, backgroundColor: plateColor(b.plate) }} />
+                        <Text style={{ color: colors.onSurface, fontFamily: fontBold, fontSize: 17 }}>{b.plate}kg</Text>
+                    </View>
+                    <Text style={{ color: colors.onSurface, fontFamily: fontBold, fontSize: 17 }}>× {b.count}</Text>
+                </View>
+            ))}
+            {remaining > 0.001 ? (
+                <Text style={{ color: colors.error, fontFamily: fontRegular, fontSize: 12, textAlign: 'center' }}>
+                    {t('plate_remainder')}: {remaining}kg
+                </Text>
+            ) : null}
+            <Text style={{ color: colors.onSurfaceVariant, fontFamily: fontRegular, fontSize: 12, textAlign: 'center', marginTop: 4 }}>
+                {t('bar')}: {BAR}kg
+            </Text>
+        </View>
+    );
+}
+
+function plateColor(p: number): string {
+    switch (p) {
+        case 25: return '#E53E3E';
+        case 20: return '#3182CE';
+        case 15: return '#F6E05E';
+        case 10: return '#48BB78';
+        case 5: return '#A0AEC0';
+        case 2.5: return '#1A202C';
+        default: return '#718096';
+    }
+}
+
 const styles = StyleSheet.create({
-    container: { flex: 1 },
     header: {
-        paddingHorizontal: 16,
-        paddingBottom: 10,
+        paddingHorizontal: tokens.spacing.lg,
+        paddingBottom: tokens.spacing.sm,
     },
-    headerTopRow: {
+    headerRow: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
     },
-    timerText: {
-        fontSize: 14,
-        letterSpacing: 1,
-    },
-    headerMainRow: {
-        marginTop: 8,
+    iconBtn: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
+    headerCenter: { alignItems: 'center' },
+    elapsed: { fontSize: 17, letterSpacing: 1 },
+    headerSub: { fontSize: 11, marginTop: 1 },
+    titleRow: {
         flexDirection: 'row',
         alignItems: 'center',
         gap: 10,
+        marginTop: 6,
     },
-    nameInput: {
-        flex: 1,
-        fontSize: 22,
-    },
+    titleInput: { flex: 1, fontSize: 26 },
     finishBtn: {
-        borderRadius: 12,
-        paddingHorizontal: 14,
+        paddingHorizontal: 18,
         paddingVertical: 10,
+        borderRadius: 999,
     },
-    finishBtnText: {
-        fontSize: 14,
-    },
-    restTimerCard: {
-        marginHorizontal: 16,
-        borderRadius: 16,
-        paddingVertical: 10,
-        paddingHorizontal: 14,
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-    },
-    restTimerTitle: {
-        fontSize: 11,
-        textTransform: 'uppercase',
-        letterSpacing: 1,
-    },
-    restTimerValue: {
-        fontSize: 30,
-    },
-    skipBtn: {
-        borderRadius: 12,
-        paddingHorizontal: 12,
-        paddingVertical: 8,
-    },
-    skipBtnText: {
-        fontSize: 12,
-    },
-    scroll: {
-        flex: 1,
-    },
-    exerciseCard: {
-        marginBottom: 20,
-    },
-    exerciseTitle: {
-        fontSize: 20,
-        marginBottom: 8,
-    },
+    finishText: { fontSize: 14 },
+    colHead: { fontSize: 11, letterSpacing: 0.5, textTransform: 'uppercase' },
     setRow: {
-        borderRadius: 14,
-        padding: 12,
-        marginBottom: 8,
         alignItems: 'center',
-        gap: 8,
+        paddingVertical: 6,
+        paddingHorizontal: 4,
+        borderRadius: tokens.radius.md,
+        marginVertical: 3,
+        gap: 4,
     },
-    setNumber: {
-        width: 64,
-        fontSize: 12,
-    },
-    inputsRow: {
-        flex: 1,
-        flexDirection: 'row',
-        gap: 8,
-    },
-    input: {
-        flex: 1,
-        borderRadius: 10,
-        backgroundColor: 'rgba(255,255,255,0.06)',
-        paddingHorizontal: 10,
-        paddingVertical: 8,
-        textAlign: 'center',
-        fontSize: 15,
-    },
-    actionsCol: {
-        alignItems: 'center',
-        gap: 6,
-    },
-    iconBtn: {
-        width: 30,
-        height: 30,
-        borderRadius: 10,
+    rpePill: {
+        width: 50,
+        height: 36,
+        borderRadius: 12,
+        borderWidth: StyleSheet.hairlineWidth,
         alignItems: 'center',
         justifyContent: 'center',
+        marginHorizontal: 3,
     },
-    checkBtn: {
-        width: 34,
-        height: 34,
-        borderRadius: 12,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    exerciseActions: {
+    restOverlay: {
+        position: 'absolute',
+        left: tokens.spacing.lg,
+        right: tokens.spacing.lg,
         flexDirection: 'row',
-        justifyContent: 'flex-start',
-        marginTop: 2,
+        alignItems: 'center',
+        paddingVertical: 12,
+        paddingHorizontal: 14,
+        borderRadius: 20,
+        borderWidth: StyleSheet.hairlineWidth,
+        gap: 8,
+        shadowColor: '#000',
+        shadowOpacity: 0.3,
+        shadowRadius: 16,
+        shadowOffset: { width: 0, height: 6 },
+        elevation: 8,
     },
-    secondaryBtn: {
-        borderRadius: 12,
+    restPill: {
         paddingHorizontal: 12,
         paddingVertical: 8,
+        borderRadius: 999,
     },
-    secondaryBtnText: {
-        fontSize: 12,
-    },
-    addExerciseBtn: {
-        borderRadius: 14,
-        paddingVertical: 14,
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: 6,
-        flexDirection: 'row',
-    },
-    addExerciseText: {
-        fontSize: 14,
-    },
-    deleteAction: {
-        width: 64,
-        marginBottom: 8,
-        borderRadius: 14,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    undoToast: {
+    prToast: {
         position: 'absolute',
-        left: 16,
-        right: 16,
-        borderRadius: 14,
-        borderWidth: 1,
-        paddingHorizontal: 14,
-        paddingVertical: 12,
+        left: tokens.spacing.lg,
+        right: tokens.spacing.lg,
         flexDirection: 'row',
-        justifyContent: 'space-between',
         alignItems: 'center',
+        padding: 14,
+        borderRadius: 16,
+        shadowColor: '#000',
+        shadowOpacity: 0.3,
+        shadowRadius: 16,
+        shadowOffset: { width: 0, height: 6 },
+        elevation: 8,
     },
-    undoText: {
-        fontSize: 13,
+    sheetBackdrop: {
+        flex: 1,
+        backgroundColor: 'rgba(0,0,0,0.5)',
+        justifyContent: 'flex-end',
     },
-    undoAction: {
-        fontSize: 13,
+    sheet: {
+        padding: tokens.spacing.lg,
+        paddingBottom: 40,
+        borderTopLeftRadius: 24,
+        borderTopRightRadius: 24,
     },
 });

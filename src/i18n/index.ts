@@ -10,7 +10,9 @@ import {
 
 export function t(key: TranslationKeys): string {
   const locale = getLocale(useAppStore.getState().language);
-  return locale.translations[key] ?? locales[defaultLocaleCode].translations[key] ?? key;
+  const tr = locale.translations as Partial<Record<TranslationKeys, string>>;
+  const en = locales[defaultLocaleCode].translations as Record<TranslationKeys, string>;
+  return tr[key] ?? en[key] ?? key;
 }
 
 export function useTranslation() {
@@ -19,7 +21,9 @@ export function useTranslation() {
   const isRTL = locale.direction === 'rtl';
 
   const translate = (key: TranslationKeys): string => {
-    return locale.translations[key] ?? locales[defaultLocaleCode].translations[key] ?? key;
+    const tr = locale.translations as Partial<Record<TranslationKeys, string>>;
+    const en = locales[defaultLocaleCode].translations as Record<TranslationKeys, string>;
+    return tr[key] ?? en[key] ?? key;
   };
 
   return {

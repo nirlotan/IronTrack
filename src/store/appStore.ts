@@ -1,6 +1,9 @@
 import { create } from 'zustand';
 import { getJSON, setJSON, hydrateCache } from '../storage/storage';
 import { defaultExercises } from '../data/exercises';
+import { seedPrograms, seedTemplates } from '../data/programs';
+import { computeNewlyUnlocked } from '../data/achievements';
+import { computePersonalRecords, detectPRKinds } from '../utils/algorithms';
 import * as Crypto from 'expo-crypto';
 import type { LocaleCode } from '../i18n/locales';
 import { saveStrengthWorkout, initHealthKit } from '../utils/health';
@@ -14,10 +17,16 @@ import type {
   SetRecord,
   WorkoutExercise,
   BodyPart,
+  Program,
+  BodyWeightEntry,
+  Achievement,
+  SetType,
 } from '../types';
 
 export type ThemeMode = 'dark' | 'light' | 'system';
 export type AccentColor = 'green' | 'purple' | 'orange';
+export type Units = 'metric' | 'imperial';
+export type BodyPartFilter = BodyPart | 'all';
 
 interface AppState {
   language: LocaleCode;
@@ -26,11 +35,20 @@ interface AppState {
   restTimerSeconds: number;
   autoStartRestTimer: boolean;
   weeklyGoal: number;
+  units: Units;
+  healthSyncEnabled: boolean;
   exercises: Exercise[];
   templates: WorkoutTemplate[];
   sessions: WorkoutSession[];
   activeWorkout: ActiveWorkout | null;
-  lastSelectedBodyPart: BodyPart | 'all';
+  programs: Program[];
+  installedProgramIds: string[];
+  bodyWeightLog: BodyWeightEntry[];
+  unlockedAchievements: Achievement[];
+  /** Set of session ids that triggered new PR celebrations not yet dismissed. */
+  recentPRBanner: { sessionId: string; prCount: number } | null;
+  /** Achievements that unlocked on the latest finishWorkout but not yet shown. */
+  recentlyUnlockedAchievements: string[];
 
   // Actions
   setLanguage: (lang: LocaleCode) => void;
@@ -39,17 +57,30 @@ interface AppState {
   setRestTimerSeconds: (s: number) => void;
   setAutoStartRestTimer: (enabled: boolean) => void;
   setWeeklyGoal: (goal: number) => void;
-  setLastSelectedBodyPart: (bodyPart: BodyPart | 'all') => void;
+  setUnits: (units: Units) => void;
+  setHealthSyncEnabled: (enabled: boolean) => void;
 
   // Exercises
   addCustomExercise: (name: string, bodyPart: BodyPart, language: string) => string;
   updateCustomExercise: (exerciseId: string, name: string, language: string) => void;
   deleteCustomExercise: (exerciseId: string) => void;
 
+  // Body part filter
+  lastSelectedBodyPart: BodyPartFilter;
+  setLastSelectedBodyPart: (bp: BodyPartFilter) => void;
+
   // Templates
   addTemplate: (template: WorkoutTemplate) => void;
   updateTemplate: (template: WorkoutTemplate) => void;
   deleteTemplate: (id: string) => void;
+
+  // Programs
+  installProgram: (programId: string) => void;
+  uninstallProgram: (programId: string) => void;
+
+  // Body weight
+  addBodyWeight: (weightKg: number) => void;
+  deleteBodyWeight: (id: string) => void;
 
   // Active Workout
   startWorkoutFromTemplate: (templateId: string) => void;
@@ -59,19 +90,25 @@ interface AppState {
   startActiveWorkout: () => void;
   renameActiveWorkout: (name: string) => void;
   addExerciseToWorkout: (exerciseId: string) => void;
+  moveExerciseInWorkout: (fromIndex: number, toIndex: number) => void;
   addSetToExercise: (exerciseIndex: number) => void;
   removeSet: (exerciseIndex: number, setIndex: number) => void;
-  updateSet: (exerciseIndex: number, setIndex: number, field: 'weight' | 'reps', value: number | string | null) => void;
+  updateSet: (exerciseIndex: number, setIndex: number, field: 'weight' | 'reps', value: number | null) => void;
+  updateSetRPE: (exerciseIndex: number, setIndex: number, rpe: number | undefined) => void;
+  updateSetType: (exerciseIndex: number, setIndex: number, type: SetType) => void;
   toggleSetComplete: (exerciseIndex: number, setIndex: number) => void;
   finishWorkout: () => void;
   discardWorkout: () => void;
-  createTemplateFromSession: (sessionId: string) => void;
 
   // History helpers
   getLastSessionForExercise: (exerciseId: string) => SetRecord[] | null;
   getLastSessionForTemplate: (templateId: string) => WorkoutSession | null;
   hideRecentSession: (id: string) => void;
   deleteSession: (id: string) => void;
+
+  // Banners
+  dismissPRBanner: () => void;
+  dismissAchievementBanner: () => void;
 
   // Hydrate
   hydrate: () => Promise<void>;
@@ -84,10 +121,15 @@ const KEYS = {
   restTimer: 'app_rest_timer',
   autoStartRestTimer: 'app_auto_start_rest_timer',
   weeklyGoal: 'app_weekly_goal',
+  units: 'app_units',
+  healthSync: 'app_health_sync',
   exercises: 'app_exercises',
   templates: 'app_templates',
   sessions: 'app_sessions',
   activeWorkout: 'app_active_workout',
+  installedPrograms: 'app_installed_programs',
+  bodyWeightLog: 'app_body_weight_log',
+  achievements: 'app_unlocked_achievements',
 };
 
 function normalizeTemplate(template: WorkoutTemplate & { exercises: any[] }): WorkoutTemplate {
@@ -96,29 +138,16 @@ function normalizeTemplate(template: WorkoutTemplate & { exercises: any[] }): Wo
     exercises: template.exercises.map((exercise: any) => ({
       exerciseId: exercise.exerciseId,
       sets: exercise.sets ?? exercise.targetSets ?? 3,
-      reps: (exercise.reps ?? exercise.targetReps ?? exercise.lastReps ?? 10).toString(),
+      reps: exercise.reps ?? exercise.targetReps ?? exercise.lastReps ?? 10,
       weight:
         exercise.weight != null
-          ? exercise.weight.toString()
+          ? exercise.weight
           : exercise.lastWeight != null
-            ? exercise.lastWeight.toString()
+            ? exercise.lastWeight
             : null,
     })),
   };
 }
-
-const parseReps = (reps: string | number | null): number => {
-  if (reps == null) return 0;
-  const s = reps.toString();
-  if (s.includes('-')) {
-    const parts = s.split('-').map((p) => parseFloat(p.trim()));
-    if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
-      return (parts[0] + parts[1]) / 2;
-    }
-  }
-  const val = parseFloat(s);
-  return isNaN(val) ? 0 : val;
-};
 
 export const useAppStore = create<AppState>((set, get) => ({
   language: 'he',
@@ -127,10 +156,18 @@ export const useAppStore = create<AppState>((set, get) => ({
   restTimerSeconds: 90,
   autoStartRestTimer: true,
   weeklyGoal: 4,
+  units: 'metric',
+  healthSyncEnabled: true,
   exercises: defaultExercises,
   templates: [],
   sessions: [],
   activeWorkout: null,
+  programs: seedPrograms,
+  installedProgramIds: [],
+  bodyWeightLog: [],
+  unlockedAchievements: [],
+  recentPRBanner: null,
+  recentlyUnlockedAchievements: [],
   lastSelectedBodyPart: 'all',
 
   setLanguage: (lang) => {
@@ -164,9 +201,78 @@ export const useAppStore = create<AppState>((set, get) => ({
     setJSON(KEYS.weeklyGoal, safeGoal);
   },
 
-  setLastSelectedBodyPart: (bodyPart) => {
-    set({ lastSelectedBodyPart: bodyPart });
+  setUnits: (units) => {
+    set({ units });
+    setJSON(KEYS.units, units);
   },
+
+  setHealthSyncEnabled: (enabled) => {
+    set({ healthSyncEnabled: enabled });
+    setJSON(KEYS.healthSync, enabled);
+    if (enabled) {
+      initHealthKit().catch(() => { });
+    }
+  },
+
+  installProgram: (programId) => {
+    const program = get().programs.find((p) => p.id === programId);
+    if (!program) return;
+
+    const now = Date.now();
+    const existingIds = new Set(get().templates.map((t) => t.id));
+    const seedById = new Map(seedTemplates.map((t) => [t.id, t]));
+
+    // Clone each seed template into the user's library with a fresh id.
+    const cloned: WorkoutTemplate[] = program.templateIds
+      .map((id) => seedById.get(id))
+      .filter((t): t is WorkoutTemplate => !!t)
+      .map((seed) => ({
+        ...seed,
+        id: `tpl_${uuid()}`,
+        createdAt: now,
+        updatedAt: now,
+      }));
+
+    const templates = [...cloned, ...get().templates].filter(
+      (t) => !existingIds.has(t.id) || cloned.every((c) => c.id !== t.id)
+    );
+    const installedProgramIds = Array.from(
+      new Set([...get().installedProgramIds, programId])
+    );
+
+    set({ templates, installedProgramIds });
+    setJSON(KEYS.templates, templates);
+    setJSON(KEYS.installedPrograms, installedProgramIds);
+  },
+
+  uninstallProgram: (programId) => {
+    const installedProgramIds = get().installedProgramIds.filter((id) => id !== programId);
+    set({ installedProgramIds });
+    setJSON(KEYS.installedPrograms, installedProgramIds);
+  },
+
+  addBodyWeight: (weightKg) => {
+    if (!isFinite(weightKg) || weightKg <= 0) return;
+    const entry: BodyWeightEntry = {
+      id: uuid(),
+      date: new Date().toISOString().split('T')[0],
+      weightKg: Math.round(weightKg * 10) / 10,
+    };
+    const bodyWeightLog = [entry, ...get().bodyWeightLog];
+    set({ bodyWeightLog });
+    setJSON(KEYS.bodyWeightLog, bodyWeightLog);
+  },
+
+  deleteBodyWeight: (id) => {
+    const bodyWeightLog = get().bodyWeightLog.filter((e) => e.id !== id);
+    set({ bodyWeightLog });
+    setJSON(KEYS.bodyWeightLog, bodyWeightLog);
+  },
+
+  dismissPRBanner: () => set({ recentPRBanner: null }),
+  dismissAchievementBanner: () => set({ recentlyUnlockedAchievements: [] }),
+
+  setLastSelectedBodyPart: (bp) => set({ lastSelectedBodyPart: bp }),
 
   addCustomExercise: (name, bodyPart, language) => {
     const id = `custom_${uuid()}`;
@@ -184,25 +290,11 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   updateCustomExercise: (exerciseId, name, language) => {
-    const exercises = get().exercises.map((ex) => {
-      if (ex.id === exerciseId) {
-        return {
-          ...ex,
-          customNames: {
-            ...(ex.customNames || {}),
-            [language]: name,
-          },
-        };
-      }
-      return ex;
-    });
-
-    const activeWorkout = get().activeWorkout;
-    // We don't strictly NEED to update activeWorkout state here because getExerciseName
-    // pulls from the exercises array anyway, but let's keep it consistent if there's any local caching.
-    // Actually, ActiveWorkout doesn't store the name, it stores exerciseId. 
-    // So updating the exercises array is enough.
-
+    const exercises = get().exercises.map((e) =>
+      e.id === exerciseId
+        ? { ...e, customNames: { ...e.customNames, [language]: name } }
+        : e
+    );
     set({ exercises });
     setJSON(KEYS.exercises, exercises.filter((e) => e.isCustom));
   },
@@ -336,8 +428,8 @@ export const useAppStore = create<AppState>((set, get) => ({
         return {
           exerciseId: ex.exerciseId,
           sets: ex.sets.length,
-          reps: (lastSet?.reps ?? '10').toString(),
-          weight: lastSet?.weight?.toString() ?? null,
+          reps: lastSet?.reps ?? 10,
+          weight: lastSet?.weight ?? null,
         };
       }),
       createdAt: existing?.createdAt ?? now,
@@ -417,6 +509,20 @@ export const useAppStore = create<AppState>((set, get) => ({
     setJSON(KEYS.activeWorkout, updated);
   },
 
+  moveExerciseInWorkout: (fromIndex, toIndex) => {
+    const aw = get().activeWorkout;
+    if (!aw || (aw.mode !== 'draft' && aw.mode !== 'inProgress')) return;
+    if (fromIndex === toIndex) return;
+    if (fromIndex < 0 || fromIndex >= aw.exercises.length) return;
+    if (toIndex < 0 || toIndex >= aw.exercises.length) return;
+    const exercises = [...aw.exercises];
+    const [moved] = exercises.splice(fromIndex, 1);
+    exercises.splice(toIndex, 0, moved);
+    const updated = { ...aw, exercises };
+    set({ activeWorkout: updated });
+    setJSON(KEYS.activeWorkout, updated);
+  },
+
   addSetToExercise: (exerciseIndex) => {
     const aw = get().activeWorkout;
     if (!aw || (aw.mode !== 'draft' && aw.mode !== 'inProgress')) return;
@@ -442,17 +548,10 @@ export const useAppStore = create<AppState>((set, get) => ({
   removeSet: (exerciseIndex, setIndex) => {
     const aw = get().activeWorkout;
     if (!aw || (aw.mode !== 'draft' && aw.mode !== 'inProgress')) return;
-    let exercises = [...aw.exercises];
+    const exercises = [...aw.exercises];
     const exercise = { ...exercises[exerciseIndex] };
     exercise.sets = exercise.sets.filter((_, i) => i !== setIndex);
-    
-    if (exercise.sets.length === 0) {
-      // Remove the entire exercise if no sets are left
-      exercises = exercises.filter((_, i) => i !== exerciseIndex);
-    } else {
-      exercises[exerciseIndex] = exercise;
-    }
-    
+    exercises[exerciseIndex] = exercise;
     const updated = { ...aw, exercises };
     set({ activeWorkout: updated });
     setJSON(KEYS.activeWorkout, updated);
@@ -486,6 +585,34 @@ export const useAppStore = create<AppState>((set, get) => ({
     setJSON(KEYS.activeWorkout, updated);
   },
 
+  updateSetRPE: (exerciseIndex, setIndex, rpe) => {
+    const aw = get().activeWorkout;
+    if (!aw) return;
+    const exercises = [...aw.exercises];
+    const exercise = { ...exercises[exerciseIndex] };
+    const sets = [...exercise.sets];
+    sets[setIndex] = { ...sets[setIndex], rpe };
+    exercise.sets = sets;
+    exercises[exerciseIndex] = exercise;
+    const updated = { ...aw, exercises };
+    set({ activeWorkout: updated });
+    setJSON(KEYS.activeWorkout, updated);
+  },
+
+  updateSetType: (exerciseIndex, setIndex, type) => {
+    const aw = get().activeWorkout;
+    if (!aw) return;
+    const exercises = [...aw.exercises];
+    const exercise = { ...exercises[exerciseIndex] };
+    const sets = [...exercise.sets];
+    sets[setIndex] = { ...sets[setIndex], setType: type };
+    exercise.sets = sets;
+    exercises[exerciseIndex] = exercise;
+    const updated = { ...aw, exercises };
+    set({ activeWorkout: updated });
+    setJSON(KEYS.activeWorkout, updated);
+  },
+
   finishWorkout: () => {
     const aw = get().activeWorkout;
     if (!aw || aw.mode !== 'inProgress') return;
@@ -493,17 +620,26 @@ export const useAppStore = create<AppState>((set, get) => ({
     const startTime = aw.startedAt ?? Date.now();
     const endTime = Date.now();
     const durationMinutes = Math.round((endTime - startTime) / 60000);
+
+    // Detect PRs against history *before* this session is added.
+    const priorRecords = computePersonalRecords(get().sessions);
+
     let totalVolume = 0;
-    for (const ex of aw.exercises) {
-      for (const s of ex.sets) {
-        if (s.isCompleted && s.weight && s.reps) {
-          const w = parseFloat(s.weight);
-          if (!isNaN(w)) {
-            totalVolume += w * parseReps(s.reps);
-          }
+    let prCount = 0;
+    const exercisesWithPRs: WorkoutExercise[] = aw.exercises.map((ex) => {
+      const prior = priorRecords[ex.exerciseId];
+      const sets = ex.sets.map((s) => {
+        if (!s.isCompleted || !s.weight || !s.reps || s.setType === 'warmup') return s;
+        totalVolume += s.weight * s.reps;
+        const kinds = detectPRKinds(s, prior);
+        if (kinds.length > 0) {
+          prCount += 1;
+          return { ...s, isPR: true, prKinds: kinds };
         }
-      }
-    }
+        return s;
+      });
+      return { ...ex, sets };
+    });
 
     const session: WorkoutSession = {
       id: aw.id,
@@ -512,50 +648,47 @@ export const useAppStore = create<AppState>((set, get) => ({
       startTime,
       endTime,
       templateId: aw.templateId,
-      exercises: aw.exercises,
+      programId: aw.programId,
+      exercises: exercisesWithPRs,
       totalVolume,
       durationMinutes,
     };
 
-    // Save to Apple Health
-    saveStrengthWorkout(startTime, endTime).catch((err) => {
-      console.log('[AppStore] HealthKit save failed:', err);
-    });
+    // Apple Health
+    if (get().healthSyncEnabled) {
+      saveStrengthWorkout(startTime, endTime, { totalVolume }).catch((err) => {
+        console.log('[AppStore] HealthKit save failed:', err);
+      });
+    }
 
     const sessions = [session, ...get().sessions];
-    set({ sessions, activeWorkout: null });
+
+    // Achievements
+    const records = computePersonalRecords(sessions);
+    const newlyUnlocked = computeNewlyUnlocked(
+      { sessions, records },
+      get().unlockedAchievements.map((a) => a.id)
+    );
+    const unlockedAchievements = [
+      ...get().unlockedAchievements,
+      ...newlyUnlocked.map((id) => ({ id, unlockedAt: Date.now() })),
+    ];
+
+    set({
+      sessions,
+      activeWorkout: null,
+      unlockedAchievements,
+      recentPRBanner: prCount > 0 ? { sessionId: session.id, prCount } : null,
+      recentlyUnlockedAchievements: newlyUnlocked,
+    });
     setJSON(KEYS.sessions, sessions);
     setJSON(KEYS.activeWorkout, null);
+    setJSON(KEYS.achievements, unlockedAchievements);
   },
 
   discardWorkout: () => {
     set({ activeWorkout: null });
     setJSON(KEYS.activeWorkout, null);
-  },
-
-  createTemplateFromSession: (sessionId) => {
-    const session = get().sessions.find((s) => s.id === sessionId);
-    if (!session) return;
-
-    const template: WorkoutTemplate = {
-      id: `tpl_${uuid()}`,
-      name: session.name,
-      exercises: session.exercises.map((ex) => {
-        const lastSet = ex.sets[ex.sets.length - 1];
-        return {
-          exerciseId: ex.exerciseId,
-          sets: ex.sets.length,
-          reps: (lastSet?.reps ?? '10').toString(),
-          weight: lastSet?.weight?.toString() ?? null,
-        };
-      }),
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-    };
-
-    const templates = [template, ...get().templates];
-    set({ templates });
-    setJSON(KEYS.templates, templates);
   },
 
   getLastSessionForExercise: (exerciseId) => {
@@ -586,18 +719,20 @@ export const useAppStore = create<AppState>((set, get) => ({
     const allKeys = Object.values(KEYS);
     await hydrateCache(allKeys);
 
-    // Initialize HealthKit
-    initHealthKit().catch(console.error);
-
     const language = getJSON<LocaleCode>(KEYS.language);
     const theme = getJSON<ThemeMode>(KEYS.theme);
     const accentColor = getJSON<AccentColor>(KEYS.accent);
     const restTimer = getJSON<number>(KEYS.restTimer);
     const autoStartRestTimer = getJSON<boolean>(KEYS.autoStartRestTimer);
     const weeklyGoal = getJSON<number>(KEYS.weeklyGoal);
+    const units = getJSON<Units>(KEYS.units);
+    const healthSync = getJSON<boolean>(KEYS.healthSync);
     const customExercises = getJSON<Exercise[]>(KEYS.exercises) ?? [];
     const templates = (getJSON<(WorkoutTemplate & { exercises: any[] })[]>(KEYS.templates) ?? []).map(normalizeTemplate);
     const sessions = getJSON<WorkoutSession[]>(KEYS.sessions) ?? [];
+    const installedProgramIds = getJSON<string[]>(KEYS.installedPrograms) ?? [];
+    const bodyWeightLog = getJSON<BodyWeightEntry[]>(KEYS.bodyWeightLog) ?? [];
+    const unlockedAchievements = getJSON<Achievement[]>(KEYS.achievements) ?? [];
     const storedActiveWorkout = getJSON<ActiveWorkout & { startTime?: number; mode?: 'draft' | 'inProgress'; createdAt?: number; startedAt?: number }>(KEYS.activeWorkout);
 
     const activeWorkout = storedActiveWorkout
@@ -609,6 +744,9 @@ export const useAppStore = create<AppState>((set, get) => ({
       }
       : null;
 
+    const enableHealthSync = healthSync ?? true;
+    if (enableHealthSync) initHealthKit().catch(console.error);
+
     set({
       language: language ?? 'he',
       themeMode: theme ?? 'dark',
@@ -616,10 +754,15 @@ export const useAppStore = create<AppState>((set, get) => ({
       restTimerSeconds: restTimer ?? 90,
       autoStartRestTimer: autoStartRestTimer ?? true,
       weeklyGoal: weeklyGoal ?? 4,
+      units: units ?? 'metric',
+      healthSyncEnabled: enableHealthSync,
       exercises: [...defaultExercises, ...customExercises],
       templates,
       sessions,
       activeWorkout,
+      installedProgramIds,
+      bodyWeightLog,
+      unlockedAchievements,
     });
   },
 }));
