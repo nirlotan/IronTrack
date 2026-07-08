@@ -1,34 +1,38 @@
-import { useState, useRef, useEffect } from 'react';
+/**
+ * Select Exercise — full-screen modal picker for the active workout.
+ * Uses the shared iOS design system: ModalHeader, SearchBox, chips, Card rows.
+ */
+import { useState, useRef, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TextInput,
-  TouchableOpacity,
   Keyboard,
   Modal,
   Platform,
   Pressable,
+  Alert,
   useWindowDimensions,
 } from 'react-native';
-import Animated, { SlideInDown, SlideOutUp } from 'react-native-reanimated';
+import Animated, { FadeIn } from 'react-native-reanimated';
 import { ScrollView } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { useTheme, ScreenBackground } from '../src/theme';
+import { Ionicons } from '@expo/vector-icons';
+import { useTheme, ScreenBackground, tokens } from '../src/theme';
 import { useTranslation } from '../src/i18n';
 import { useAppStore } from '../src/store/appStore';
 import { getExerciseName } from '../src/utils/helpers';
 import { SearchBox } from '../src/components/SearchBox';
 import { ExerciseRow } from '../src/components/ExerciseRow';
+import { ModalHeader, PillButton, SectionHeader, Card } from '../src/components/ios';
 import { bodyPartKeys, bodyPartNameKeys } from '../src/data/exercises';
 import type { BodyPart, Exercise } from '../src/types';
-import { useCallback } from 'react';
-import { Alert } from 'react-native';
 
 export default function SelectExerciseScreen() {
   const { colors } = useTheme();
-  const { t, isRTL, language } = useTranslation();
+  const { t, isRTL, language, fontBold } = useTranslation();
   const insets = useSafeAreaInsets();
   const { height: windowHeight } = useWindowDimensions();
   const router = useRouter();
@@ -85,9 +89,8 @@ export default function SelectExerciseScreen() {
     };
   }, [showCustomModal, insets.bottom]);
 
-  const filteredByBodyPart = selectedBodyPart === 'all' 
-    ? exercises 
-    : exercises.filter(ex => ex.bodyPart === selectedBodyPart);
+  const filteredByBodyPart =
+    selectedBodyPart === 'all' ? exercises : exercises.filter((ex) => ex.bodyPart === selectedBodyPart);
 
   const filteredBySearch = filteredByBodyPart.filter((ex) =>
     getExerciseName(ex, t, language).toLowerCase().includes(search.toLowerCase())
@@ -154,93 +157,76 @@ export default function SelectExerciseScreen() {
     setEditingExerciseId(null);
   };
 
+  const renderChip = (value: BodyPart | 'all', label: string) => {
+    const active = selectedBodyPart === value;
+    return (
+      <Pressable
+        key={value}
+        onPress={() => setSelectedBodyPart(value)}
+        accessibilityRole="button"
+        accessibilityState={{ selected: active }}
+        accessibilityLabel={label}
+        style={[
+          styles.filterChip,
+          { backgroundColor: active ? colors.primary : colors.fillTertiary },
+        ]}
+      >
+        <Text style={{ color: active ? colors.onPrimary : colors.onSurface, fontFamily: fontBold, fontSize: 13 }}>
+          {label}
+        </Text>
+      </Pressable>
+    );
+  };
+
   return (
     <ScreenBackground style={styles.container}>
-      <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
-        <TouchableOpacity onPress={() => router.back()}>
-          <Text style={[styles.backBtn, { color: colors.primary }]}>← {t('back')}</Text>
-        </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.primary, textAlign: isRTL ? 'right' : 'left' }]}>
-          {t('add_exercise')}
-        </Text>
-      </View>
+      <ModalHeader title={t('add_exercise')} onClose={() => router.back()} closeIcon="chevron-down" topInset={insets.top} />
 
-      {/* Muscle Filter */}
+      {/* Muscle filter */}
       <View style={styles.filterWrapper}>
-        <ScrollView 
-          horizontal 
-          showsHorizontalScrollIndicator={false} 
-          contentContainerStyle={[styles.filterScroll, { paddingHorizontal: 24, flexDirection: isRTL ? 'row-reverse' : 'row' }]}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={[
+            styles.filterScroll,
+            { paddingHorizontal: tokens.spacing.lg, flexDirection: isRTL ? 'row-reverse' : 'row' },
+          ]}
         >
-          <TouchableOpacity
-            style={[
-              styles.filterChip,
-              { backgroundColor: selectedBodyPart === 'all' ? colors.primary : colors.surfaceContainerHighest }
-            ]}
-            onPress={() => setSelectedBodyPart('all')}
-          >
-            <Text style={[styles.filterChipText, { color: selectedBodyPart === 'all' ? colors.onPrimary : colors.onSurface }]}>
-              {t('all' as any)}
-            </Text>
-          </TouchableOpacity>
-          {bodyPartKeys.map((bp) => (
-            <TouchableOpacity
-              key={bp}
-              style={[
-                styles.filterChip,
-                { backgroundColor: selectedBodyPart === bp ? colors.primary : colors.surfaceContainerHighest }
-              ]}
-              onPress={() => setSelectedBodyPart(bp)}
-            >
-              <Text style={[styles.filterChipText, { color: selectedBodyPart === bp ? colors.onPrimary : colors.onSurface }]}>
-                {t(bodyPartNameKeys[bp] as any)}
-              </Text>
-            </TouchableOpacity>
-          ))}
+          {renderChip('all', t('all' as any))}
+          {bodyPartKeys.map((bp) => renderChip(bp, t(bodyPartNameKeys[bp] as any)))}
         </ScrollView>
       </View>
 
       <ScrollView
         style={{ flex: 1 }}
-        contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 40 }}
+        contentContainerStyle={{ paddingHorizontal: tokens.spacing.lg, paddingBottom: insets.bottom + 40 }}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
         scrollEventThrottle={16}
         nestedScrollEnabled={true}
       >
-        {/* Search */}
-        <View style={[styles.searchBox, { backgroundColor: colors.surfaceContainerLow, marginTop: 16 }]}>
-          <TextInput
-            style={[styles.searchInput, { color: colors.onSurface, textAlign: isRTL ? 'right' : 'left' }]}
-            placeholder={t('library_search')}
-            placeholderTextColor={colors.outlineVariant}
-            value={search}
-            onChangeText={setSearch}
-          />
+        <View style={{ marginTop: tokens.spacing.sm }}>
+          <SearchBox value={search} onChangeText={setSearch} placeholder={t('library_search')} />
         </View>
 
-        {/* Custom Exercise — first option */}
-        <TouchableOpacity
-          style={[styles.customBtn, { backgroundColor: colors.surfaceContainerHighest }]}
+        {/* Custom exercise — first option */}
+        <PillButton
+          title={t('add_custom_exercise')}
+          icon="add-circle-outline"
+          variant="secondary"
+          fullWidth
           onPress={() => {
             if (selectedBodyPart !== 'all') {
               setCustomBodyPart(selectedBodyPart);
             }
             setShowCustomModal(true);
           }}
-          activeOpacity={0.8}
-        >
-          <Text style={[styles.customBtnText, { color: colors.primary }]}>
-            ⊕ {t('add_custom_exercise')}
-          </Text>
-        </TouchableOpacity>
+        />
 
-        {/* Exercise Groups */}
+        {/* Exercise groups */}
         {grouped.map((group) => (
-          <View key={group.bodyPart} style={styles.group}>
-            <Text style={[styles.groupTitle, { color: colors.onBackground, textAlign: isRTL ? 'right' : 'left' }]}>
-              {group.label}
-            </Text>
+          <View key={group.bodyPart}>
+            <SectionHeader title={group.label} style={{ paddingHorizontal: 4 }} />
             {group.items.map((exercise) => (
               <ExerciseRow
                 key={exercise.id}
@@ -254,7 +240,7 @@ export default function SelectExerciseScreen() {
         ))}
       </ScrollView>
 
-      {/* Custom Exercise Overlay */}
+      {/* Custom exercise sheet */}
       <Modal
         visible={showCustomModal}
         transparent
@@ -264,97 +250,105 @@ export default function SelectExerciseScreen() {
         onRequestClose={handleCloseModal}
       >
         <View style={styles.modalOverlay}>
-          <Pressable
-            style={StyleSheet.absoluteFill}
-            onPress={handleCloseModal}
-          />
-          <Animated.View
-            entering={SlideInDown}
-            exiting={SlideOutUp}
-            style={{ width: '100%' }}
-          >
-            <ScrollView
-              style={styles.modalScroll}
-              contentContainerStyle={{
-                paddingTop: insets.top,
-                paddingBottom: Math.max(insets.bottom, 16) + keyboardInset,
-              }}
-              keyboardShouldPersistTaps="handled"
-              keyboardDismissMode="interactive"
-              automaticallyAdjustKeyboardInsets
-              showsVerticalScrollIndicator={false}
+          <Pressable style={StyleSheet.absoluteFill} onPress={handleCloseModal} />
+          <Animated.View entering={FadeIn} style={{ width: '100%' }}>
+            <View
+              style={[
+                styles.modalContent,
+                {
+                  backgroundColor: colors.surfaceContainer,
+                  maxHeight: windowHeight - insets.top - 24,
+                  paddingBottom: Math.max(insets.bottom, 16) + keyboardInset,
+                },
+              ]}
             >
-              <View
-                style={[
-                  styles.modalContent,
-                  {
-                    backgroundColor: colors.surfaceContainer,
-                    maxHeight: windowHeight - insets.top - insets.bottom - 24,
-                    marginBottom: keyboardInset,
-                  },
-                ]}
+              <Text
+                accessibilityRole="header"
+                style={{
+                  color: colors.onSurface,
+                  fontFamily: fontBold,
+                  fontSize: 18,
+                  marginBottom: 14,
+                  textAlign: isRTL ? 'right' : 'left',
+                }}
               >
-                <Text style={[styles.modalTitle, { color: colors.onSurface, textAlign: isRTL ? 'right' : 'left' }]}>
-                  {editingExerciseId ? t('edit_exercise' as any) : t('add_custom_exercise')}
-                </Text>
-                <TextInput
-                  style={[styles.modalInput, { backgroundColor: colors.surfaceContainerLow, color: colors.onSurface }]}
-                  placeholder={t('exercise_name')}
-                  placeholderTextColor={colors.outlineVariant}
-                  value={customName}
-                  onChangeText={setCustomName}
-                  textAlign={isRTL ? 'right' : 'left'}
-                  ref={customNameRef}
-                  returnKeyType="done"
-                  onSubmitEditing={handleSaveCustom}
-                />
-                {!editingExerciseId && (
-                  <>
-                    <Text style={[styles.modalLabel, { color: colors.onSurfaceVariant, textAlign: isRTL ? 'right' : 'left' }]}>
-                      {t('body_part')}
-                    </Text>
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipRow}>
-                      {bodyPartKeys.map((bp) => (
-                        <TouchableOpacity
+                {editingExerciseId ? t('edit_exercise' as any) : t('add_custom_exercise')}
+              </Text>
+              <TextInput
+                style={[
+                  styles.modalInput,
+                  { backgroundColor: colors.fillTertiary, color: colors.onSurface },
+                ]}
+                placeholder={t('exercise_name')}
+                placeholderTextColor={colors.outline}
+                value={customName}
+                onChangeText={setCustomName}
+                textAlign={isRTL ? 'right' : 'left'}
+                ref={customNameRef}
+                returnKeyType="done"
+                onSubmitEditing={handleSaveCustom}
+                accessibilityLabel={t('exercise_name')}
+              />
+              {!editingExerciseId && (
+                <>
+                  <Text
+                    style={{
+                      color: colors.onSurfaceVariant,
+                      fontFamily: fontBold,
+                      fontSize: 12,
+                      letterSpacing: 0.6,
+                      textTransform: 'uppercase',
+                      marginBottom: 8,
+                      textAlign: isRTL ? 'right' : 'left',
+                    }}
+                  >
+                    {t('body_part')}
+                  </Text>
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={{ gap: 8, paddingVertical: 4 }}
+                    style={{ marginBottom: 16 }}
+                  >
+                    {bodyPartKeys.map((bp) => {
+                      const active = customBodyPart === bp;
+                      return (
+                        <Pressable
                           key={bp}
-                          style={[
-                            styles.chip,
-                            {
-                              backgroundColor:
-                                customBodyPart === bp ? colors.primaryContainer : colors.surfaceContainerHighest,
-                            },
-                          ]}
                           onPress={() => setCustomBodyPart(bp)}
+                          accessibilityRole="button"
+                          accessibilityState={{ selected: active }}
+                          style={[
+                            styles.filterChip,
+                            { backgroundColor: active ? colors.primary : colors.fillTertiary },
+                          ]}
                         >
                           <Text
-                            style={[
-                              styles.chipText,
-                              { color: customBodyPart === bp ? colors.onPrimaryContainer : colors.onSurface },
-                            ]}
+                            style={{
+                              color: active ? colors.onPrimary : colors.onSurface,
+                              fontFamily: fontBold,
+                              fontSize: 13,
+                            }}
                           >
                             {t(bodyPartNameKeys[bp] as any)}
                           </Text>
-                        </TouchableOpacity>
-                      ))}
-                    </ScrollView>
-                  </>
-                )}
-                <View style={styles.modalActions}>
-                  <TouchableOpacity
-                    style={[styles.modalBtn, { backgroundColor: colors.surfaceContainerHighest }]}
-                    onPress={handleCloseModal}
-                  >
-                    <Text style={[styles.modalBtnText, { color: colors.onSurface }]}>{t('cancel')}</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[styles.modalBtn, { backgroundColor: colors.primaryContainer }]}
-                    onPress={handleSaveCustom}
-                  >
-                    <Text style={[styles.modalBtnText, { color: colors.onPrimaryContainer }]}>{t('save')}</Text>
-                  </TouchableOpacity>
-                </View>
+                        </Pressable>
+                      );
+                    })}
+                  </ScrollView>
+                </>
+              )}
+              <View style={{ flexDirection: 'row', gap: 12 }}>
+                <PillButton title={t('cancel')} variant="secondary" onPress={handleCloseModal} style={{ flex: 1 }} />
+                <PillButton
+                  title={t('save')}
+                  icon="checkmark"
+                  onPress={handleSaveCustom}
+                  disabled={!customName.trim()}
+                  style={{ flex: 1 }}
+                />
               </View>
-            </ScrollView>
+            </View>
           </Animated.View>
         </View>
       </Modal>
@@ -364,107 +358,34 @@ export default function SelectExerciseScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  header: { paddingHorizontal: 24, paddingBottom: 12 },
-  backBtn: { fontFamily: 'SpaceGrotesk_700Bold', fontSize: 15, marginBottom: 8 },
-  headerTitle: {
-    fontFamily: 'SpaceGrotesk_700Bold',
-    fontSize: 24,
-    textTransform: 'uppercase',
-    letterSpacing: -0.5,
-  },
   filterWrapper: {
-    paddingVertical: 8,
+    paddingVertical: 4,
   },
   filterScroll: {
     gap: 8,
   },
   filterChip: {
-    paddingHorizontal: 16,
+    paddingHorizontal: 14,
     paddingVertical: 10,
-    borderRadius: 20,
-  },
-  filterChipText: {
-    fontFamily: 'SpaceGrotesk_700Bold',
-    fontSize: 12,
-    textTransform: 'uppercase',
-  },
-  searchBox: {
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    marginBottom: 16,
-  },
-  searchInput: {
-    fontSize: 14,
-    fontFamily: 'Manrope_400Regular',
-  },
-  customBtn: {
-    borderRadius: 12,
-    paddingVertical: 18,
-    alignItems: 'center',
-    marginBottom: 24,
-  },
-  customBtnText: {
-    fontFamily: 'SpaceGrotesk_700Bold',
-    fontSize: 13,
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-  },
-  group: { marginBottom: 20 },
-  groupTitle: {
-    fontFamily: 'SpaceGrotesk_700Bold',
-    fontSize: 20,
-    letterSpacing: -0.5,
-    marginBottom: 8,
+    borderRadius: tokens.radius.pill,
+    minHeight: 38,
+    justifyContent: 'center',
   },
   modalOverlay: {
     flex: 1,
-    justifyContent: 'flex-start',
-    backgroundColor: 'rgba(0,0,0,0.6)',
-  },
-  modalScroll: {
-    width: '100%',
+    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(0,0,0,0.5)',
   },
   modalContent: {
-    borderBottomLeftRadius: 20,
-    borderBottomRightRadius: 20,
-    padding: 24,
-    paddingBottom: 24,
-  },
-  modalTitle: {
-    fontFamily: 'SpaceGrotesk_700Bold',
-    fontSize: 20,
-    textTransform: 'uppercase',
-    marginBottom: 20,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: tokens.spacing.lg,
   },
   modalInput: {
     borderRadius: 12,
-    padding: 16,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
     fontSize: 16,
-    fontFamily: 'Manrope_400Regular',
-    marginBottom: 16,
+    marginBottom: 14,
   },
-  modalLabel: {
-    fontFamily: 'SpaceGrotesk_700Bold',
-    fontSize: 11,
-    textTransform: 'uppercase',
-    letterSpacing: 2,
-    marginBottom: 8,
-  },
-  chipRow: { flexDirection: 'row', marginBottom: 24 },
-  chip: {
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 20,
-    marginRight: 8,
-  },
-  chipText: { fontFamily: 'SpaceGrotesk_700Bold', fontSize: 12 },
-  modalActions: { flexDirection: 'row', gap: 12 },
-  modalBtn: {
-    flex: 1,
-    borderRadius: 12,
-    paddingVertical: 16,
-    alignItems: 'center',
-  },
-  modalBtnText: { fontFamily: 'SpaceGrotesk_700Bold', fontSize: 14 },
 });

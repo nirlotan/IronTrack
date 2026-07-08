@@ -23,6 +23,7 @@ const ar: LocaleDefinition<Partial<Record<TranslationKeys, string>>> = {
         reset: 'إعادة ضبط',
         skip: 'تخطي',
         hide: 'إخفاء',
+        all: 'الكل',
 
         // Tabs
         tab_home: 'الرئيسية',

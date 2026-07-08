@@ -23,6 +23,7 @@ const ru: LocaleDefinition<Partial<Record<TranslationKeys, string>>> = {
         reset: 'Сбросить',
         skip: 'Пропустить',
         hide: 'Скрыть',
+        all: 'Все',
 
         // Tabs
         tab_home: 'Главная',

@@ -29,6 +29,7 @@ import {
   SectionHeader,
   LargeTitle,
   Badge,
+  IconButton,
 } from '../../src/components/ios';
 import { SearchBox } from '../../src/components/SearchBox';
 import { bodyPartKeys, bodyPartNameKeys } from '../../src/data/exercises';
@@ -121,37 +122,9 @@ export default function TrainScreen() {
           title={t('train_title')}
           trailing={
             section === 'routines' ? (
-              <Pressable
-                onPress={() => router.push('/create-template')}
-                hitSlop={12}
-                style={({ pressed }) => ({
-                  opacity: pressed ? 0.6 : 1,
-                  width: 36,
-                  height: 36,
-                  borderRadius: 18,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  backgroundColor: colors.surfaceContainerHigh,
-                })}
-              >
-                <Ionicons name="add" size={22} color={colors.primary} />
-              </Pressable>
+              <IconButton icon="add" label={t('new_routine')} onPress={() => router.push('/create-template')} />
             ) : section === 'exercises' ? (
-              <Pressable
-                onPress={() => setCustomModalOpen(true)}
-                hitSlop={12}
-                style={({ pressed }) => ({
-                  opacity: pressed ? 0.6 : 1,
-                  width: 36,
-                  height: 36,
-                  borderRadius: 18,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  backgroundColor: colors.surfaceContainerHigh,
-                })}
-              >
-                <Ionicons name="add" size={22} color={colors.primary} />
-              </Pressable>
+              <IconButton icon="add" label={t('add_custom_exercise')} onPress={() => setCustomModalOpen(true)} />
             ) : null
           }
         />

@@ -51,6 +51,8 @@ import {
     Badge,
     ProgressRing,
     ListRow,
+    Stepper,
+    IconButton,
 } from '../src/components/ios';
 import {
     computePersonalRecords,
@@ -262,7 +264,13 @@ export default function ActiveWorkoutScreen() {
             {/* ─── Header ──────────────────────────────────────────────── */}
             <View style={[styles.header, { paddingTop: insets.top + 6 }]}>
                 <View style={styles.headerRow}>
-                    <Pressable onPress={() => router.back()} hitSlop={10} style={styles.iconBtn}>
+                    <Pressable
+                        onPress={() => router.back()}
+                        hitSlop={10}
+                        style={styles.iconBtn}
+                        accessibilityRole="button"
+                        accessibilityLabel={t('back')}
+                    >
                         <Ionicons name="chevron-down" size={26} color={colors.onSurface} />
                     </Pressable>
                     <View style={styles.headerCenter}>
@@ -273,7 +281,13 @@ export default function ActiveWorkoutScreen() {
                             {completedSets}/{totalSets} {t('sets').toLowerCase()} · {Math.round(liveVolume)}kg
                         </Text>
                     </View>
-                    <Pressable onPress={handleDiscard} hitSlop={10} style={styles.iconBtn}>
+                    <Pressable
+                        onPress={handleDiscard}
+                        hitSlop={10}
+                        style={styles.iconBtn}
+                        accessibilityRole="button"
+                        accessibilityLabel={t('discard_workout')}
+                    >
                         <Ionicons name="close" size={24} color={colors.error} />
                     </Pressable>
                 </View>
@@ -336,26 +350,38 @@ export default function ActiveWorkoutScreen() {
                                             {getExerciseName(info, t, language)}
                                         </Text>
                                         <View style={{ flexDirection: isRTL ? 'row-reverse' : 'row', alignItems: 'center', gap: 4, marginHorizontal: 6 }}>
-                                            <Pressable
-                                                onPress={() => onMove(-1)}
+                                            <IconButton
+                                                icon="chevron-up"
+                                                size={30}
+                                                label="Move exercise up"
+                                                tint={colors.onSurfaceVariant}
+                                                background="transparent"
                                                 disabled={!canMoveUp}
-                                                hitSlop={8}
-                                                accessibilityRole="button"
-                                                accessibilityLabel="Move exercise up"
-                                                style={{ padding: 4, opacity: canMoveUp ? 1 : 0.25 }}
-                                            >
-                                                <Ionicons name="chevron-up" size={20} color={colors.onSurfaceVariant} />
-                                            </Pressable>
-                                            <Pressable
-                                                onPress={() => onMove(1)}
+                                                onPress={() => onMove(-1)}
+                                            />
+                                            <IconButton
+                                                icon="chevron-down"
+                                                size={30}
+                                                label="Move exercise down"
+                                                tint={colors.onSurfaceVariant}
+                                                background="transparent"
                                                 disabled={!canMoveDown}
-                                                hitSlop={8}
-                                                accessibilityRole="button"
-                                                accessibilityLabel="Move exercise down"
-                                                style={{ padding: 4, opacity: canMoveDown ? 1 : 0.25 }}
-                                            >
-                                                <Ionicons name="chevron-down" size={20} color={colors.onSurfaceVariant} />
-                                            </Pressable>
+                                                onPress={() => onMove(1)}
+                                            />
+                                            <IconButton
+                                                icon="disc-outline"
+                                                size={30}
+                                                label={t('plate_calculator')}
+                                                tint={colors.onSurfaceVariant}
+                                                background="transparent"
+                                                onPress={() => {
+                                                    const heaviest = Math.max(
+                                                        0,
+                                                        ...exercise.sets.map((s) => s.weight ?? 0)
+                                                    );
+                                                    setPlateSheet({ weight: heaviest || (sg?.weight ?? 20) });
+                                                }}
+                                            />
                                         </View>
                                         {prevRecord ? (
                                             <Badge label={`PR ${prevRecord.bestWeight}kg`} color={colors.tertiary} />
@@ -395,7 +421,7 @@ export default function ActiveWorkoutScreen() {
                                         <Text style={[styles.colHead, { color: colors.outline, fontFamily: fontBold, flex: 1, textAlign: 'center' }]}>{t('weight_kg')}</Text>
                                         <Text style={[styles.colHead, { color: colors.outline, fontFamily: fontBold, flex: 1, textAlign: 'center' }]}>{t('reps')}</Text>
                                         <Text style={[styles.colHead, { color: colors.outline, fontFamily: fontBold, width: 50, textAlign: 'center' }]}>{t('rpe')}</Text>
-                                        <View style={{ width: 38 }} />
+                                        <View style={{ width: 40 }} />
                                     </View>
 
                                     {exercise.sets.map((set, setIdx) => (
@@ -417,7 +443,8 @@ export default function ActiveWorkoutScreen() {
 
                                     <View style={{ height: 6 }} />
                                     <PillButton
-                                        title={`+ ${t('add_set')}`}
+                                        title={t('add_set')}
+                                        icon="add"
                                         variant="ghost"
                                         fullWidth
                                         onPress={() => addSetToExercise(exIdx)}
@@ -650,26 +677,55 @@ function SetRow({
                     },
                 ]}
             >
-                <Pressable onPress={onOpenType} style={{ width: 30, alignItems: 'center' }}>
+                <Pressable
+                    onPress={onOpenType}
+                    hitSlop={6}
+                    accessibilityRole="button"
+                    accessibilityLabel={`${t('set_type')} ${setIdx + 1}: ${t(typeMeta.key as any)}`}
+                    style={{ width: 30, alignItems: 'center' }}
+                >
                     <Text style={{ fontSize: 18 }}>{typeMeta.emoji}</Text>
                     <Text style={{ color: colors.onSurfaceVariant, fontFamily: fontBold, fontSize: 10 }}>{setIdx + 1}</Text>
                 </Pressable>
-                <NumInput
+                <Stepper
                     value={set.weight}
                     onChange={onChangeWeight}
-                    onLongPress={set.weight ? () => onOpenPlate(set.weight!) : undefined}
+                    step={2.5}
+                    min={0}
+                    compact
+                    label={t('weight_kg')}
+                    onLongPressValue={set.weight ? () => onOpenPlate(set.weight!) : undefined}
+                    style={{ flex: 1, marginHorizontal: 3, backgroundColor: colors.surface }}
                 />
-                <NumInput value={set.reps} onChange={onChangeReps} />
-                <Pressable onPress={onOpenRPE} style={[styles.rpePill, { backgroundColor: set.rpe != null ? colors.tertiary : 'transparent', borderColor: colors.outline }]}>
+                <Stepper
+                    value={set.reps}
+                    onChange={onChangeReps}
+                    step={1}
+                    min={0}
+                    compact
+                    label={t('reps')}
+                    style={{ flex: 1, marginHorizontal: 3, backgroundColor: colors.surface }}
+                />
+                <Pressable
+                    onPress={onOpenRPE}
+                    hitSlop={6}
+                    accessibilityRole="button"
+                    accessibilityLabel={`${t('rpe')}: ${set.rpe ?? '—'}`}
+                    style={[styles.rpePill, { backgroundColor: set.rpe != null ? colors.tertiary : 'transparent', borderColor: colors.outline }]}
+                >
                     <Text style={{ color: set.rpe != null ? (colors.onTertiary ?? '#000') : colors.onSurfaceVariant, fontFamily: fontBold, fontSize: 13 }}>
                         {set.rpe ?? '—'}
                     </Text>
                 </Pressable>
                 <Pressable
                     onPress={onComplete}
+                    hitSlop={4}
+                    accessibilityRole="checkbox"
+                    accessibilityLabel={`${t('sets')} ${setIdx + 1}`}
+                    accessibilityState={{ checked: set.isCompleted }}
                     style={{
-                        width: 38,
-                        height: 38,
+                        width: 40,
+                        height: 40,
                         borderRadius: 12,
                         alignItems: 'center',
                         justifyContent: 'center',
@@ -680,51 +736,6 @@ function SetRow({
                 </Pressable>
             </View>
         </Swipeable>
-    );
-}
-
-function NumInput({
-    value,
-    onChange,
-    onLongPress,
-}: {
-    value: number | null;
-    onChange: (v: number | null) => void;
-    onLongPress?: () => void;
-}) {
-    const { colors } = useTheme();
-    const { fontBold } = useTranslation();
-    const [text, setText] = useState(value?.toString() ?? '');
-    useEffect(() => {
-        setText(value?.toString() ?? '');
-    }, [value]);
-    return (
-        <Pressable onLongPress={onLongPress} style={{ flex: 1, marginHorizontal: 3 }}>
-            <TextInput
-                value={text}
-                onChangeText={(v) => {
-                    setText(v);
-                    if (v === '') onChange(null);
-                    else {
-                        const n = Number(v.replace(',', '.'));
-                        if (isFinite(n)) onChange(n);
-                    }
-                }}
-                keyboardType="decimal-pad"
-                placeholder="—"
-                placeholderTextColor={colors.outline}
-                selectTextOnFocus
-                style={{
-                    backgroundColor: colors.surface,
-                    borderRadius: 10,
-                    textAlign: 'center',
-                    paddingVertical: 8,
-                    color: colors.onSurface,
-                    fontFamily: fontBold,
-                    fontSize: 17,
-                }}
-            />
-        </Pressable>
     );
 }
 
@@ -856,7 +867,7 @@ const styles = StyleSheet.create({
         gap: 10,
         marginTop: 6,
     },
-    titleInput: { flex: 1, fontSize: 26 },
+    titleInput: { flex: 1, minWidth: 0, fontSize: 26 },
     finishBtn: {
         paddingHorizontal: 18,
         paddingVertical: 10,

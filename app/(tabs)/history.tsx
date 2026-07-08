@@ -9,6 +9,7 @@ import {
   ScrollView,
   Pressable,
   Alert,
+  useWindowDimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -258,7 +259,9 @@ export default function InsightsScreen() {
 function VolumeChart({ data }: { data: Array<{ date: string; count: number; volume: number }> }) {
   const { colors } = useTheme();
   const { fontRegular } = useTranslation();
-  const width = 320;
+  const { width: windowWidth } = useWindowDimensions();
+  // Screen − page padding (16×2) − card padding (16×2)
+  const width = Math.max(240, windowWidth - tokens.spacing.lg * 4);
   const height = 160;
   const padX = 8;
   const padY = 16;

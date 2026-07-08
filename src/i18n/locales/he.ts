@@ -23,6 +23,7 @@ const he: LocaleDefinition<Partial<Record<TranslationKeys, string>>> = {
         reset: 'איפוס',
         skip: 'דילוג',
         hide: 'הסתר',
+        all: 'הכל',
 
         // Tabs
         tab_home: 'בית',

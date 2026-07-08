@@ -22,6 +22,7 @@ const es = {
         reset: 'Restablecer',
         skip: 'Omitir',
         hide: 'Ocultar',
+        all: 'Todos',
 
         // Tabs
         tab_home: 'Inicio',

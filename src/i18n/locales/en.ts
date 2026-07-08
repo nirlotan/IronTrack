@@ -22,6 +22,7 @@ const en = {
         reset: 'Reset',
         skip: 'Skip',
         hide: 'Hide',
+        all: 'All',
 
         // Tabs
         tab_home: 'Home',

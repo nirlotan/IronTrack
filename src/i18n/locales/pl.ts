@@ -23,6 +23,7 @@ const pl: LocaleDefinition<Partial<Record<TranslationKeys, string>>> = {
         reset: 'Resetuj',
         skip: 'Pomiń',
         hide: 'Ukryj',
+        all: 'Wszystkie',
 
         // Tabs
         tab_home: 'Główna',

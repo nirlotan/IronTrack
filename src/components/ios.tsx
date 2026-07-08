@@ -5,12 +5,15 @@
  * - ListRow: single row inside a Card; renders a leading icon, title, value, chevron.
  * - SegmentedControl: filled segmented control (UISegmentedControl).
  * - PillButton: filled primary / secondary / ghost pill.
+ * - IconButton: canonical round icon action (headers, inline actions).
+ * - Stepper: numeric − / value / + controller for weights, reps, sets.
+ * - ModalHeader: full-screen-modal chrome (close / title / primary action).
  * - StatTile: large-number tile for dashboards.
  * - ProgressRing: SVG ring with center label, smoothly animated.
  * - GradientFAB: tab-bar center action.
  * - SectionHeader: small uppercase grouped-list header.
  */
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -20,6 +23,7 @@ import {
   TextStyle,
   TouchableOpacity,
   Pressable,
+  TextInput,
 } from 'react-native';
 import Svg, { Circle, Defs, LinearGradient as SvgGradient, Stop } from 'react-native-svg';
 import Animated, {
@@ -284,6 +288,233 @@ export function PillButton({
   );
 }
 
+// ── Icon button ────────────────────────────────────────────────────────────
+
+export interface IconButtonProps {
+  icon: React.ComponentProps<typeof Ionicons>['name'];
+  onPress: () => void;
+  /** Required: what this button does, for screen readers. */
+  label: string;
+  size?: number;
+  tint?: string;
+  background?: string;
+  disabled?: boolean;
+  style?: StyleProp<ViewStyle>;
+}
+
+export function IconButton({
+  icon,
+  onPress,
+  label,
+  size = 36,
+  tint,
+  background,
+  disabled,
+  style,
+}: IconButtonProps) {
+  const { colors } = useTheme();
+  return (
+    <Pressable
+      onPress={() => {
+        Haptics.selectionAsync();
+        onPress();
+      }}
+      disabled={disabled}
+      hitSlop={Math.max(0, (44 - size) / 2)}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityState={{ disabled: !!disabled }}
+      style={({ pressed }) => [
+        {
+          width: size,
+          height: size,
+          borderRadius: size / 2,
+          alignItems: 'center',
+          justifyContent: 'center',
+          backgroundColor: background ?? colors.surfaceContainerHigh,
+          opacity: disabled ? 0.35 : pressed ? 0.6 : 1,
+        },
+        style,
+      ]}
+    >
+      <Ionicons name={icon} size={size * 0.58} color={tint ?? colors.primary} />
+    </Pressable>
+  );
+}
+
+// ── Stepper ────────────────────────────────────────────────────────────────
+
+export interface StepperProps {
+  value: number | null;
+  onChange: (v: number | null) => void;
+  /** Increment per tap; weights use 2.5, reps/sets use 1. */
+  step?: number;
+  min?: number;
+  /** Required: what this value is, for screen readers (e.g. "Weight"). */
+  label: string;
+  /** Direct keyboard editing of the center value. */
+  editable?: boolean;
+  placeholder?: string;
+  /** Extra action on long-pressing the value (e.g. open plate calculator). */
+  onLongPressValue?: () => void;
+  /** Tighter layout for dense rows (set tables). */
+  compact?: boolean;
+  style?: StyleProp<ViewStyle>;
+}
+
+export function Stepper({
+  value,
+  onChange,
+  step = 1,
+  min = 0,
+  label,
+  editable = true,
+  placeholder = '—',
+  onLongPressValue,
+  compact,
+  style,
+}: StepperProps) {
+  const { colors } = useTheme();
+  const { fontBold } = useTranslation();
+  const [text, setText] = useState(value?.toString() ?? '');
+  // Latest value survives rapid taps that outpace re-renders.
+  const latest = React.useRef<number | null>(value);
+
+  useEffect(() => {
+    latest.current = value;
+    setText(value?.toString() ?? '');
+  }, [value]);
+
+  const commitText = (v: string) => {
+    setText(v);
+    if (v === '') {
+      latest.current = null;
+      return onChange(null);
+    }
+    const n = Number(v.replace(',', '.'));
+    if (isFinite(n)) {
+      latest.current = n;
+      onChange(n);
+    }
+  };
+
+  const bump = (dir: 1 | -1) => {
+    Haptics.selectionAsync();
+    const base = latest.current ?? 0;
+    const next = Math.max(min, Math.round((base + dir * step) * 100) / 100);
+    latest.current = next;
+    setText(next.toString());
+    onChange(next);
+  };
+
+  const canDecrement = (value ?? 0) > min;
+
+  return (
+    <View
+      accessible={false}
+      style={[
+        styles.stepper,
+        { backgroundColor: colors.fillTertiary },
+        style,
+      ]}
+    >
+      <Pressable
+        onPress={() => bump(-1)}
+        disabled={!canDecrement}
+        hitSlop={8}
+        accessibilityRole="button"
+        accessibilityLabel={`${label} −${step}`}
+        style={({ pressed }) => [
+          styles.stepperBtn,
+          compact && styles.stepperBtnCompact,
+          { opacity: !canDecrement ? 0.3 : pressed ? 0.5 : 1 },
+        ]}
+      >
+        <Ionicons name="remove" size={compact ? 15 : 18} color={colors.primary} />
+      </Pressable>
+      <Pressable
+        onLongPress={onLongPressValue}
+        style={{ flex: 1 }}
+        accessible={!editable}
+        accessibilityLabel={!editable ? `${label}: ${value ?? placeholder}` : undefined}
+      >
+        <TextInput
+          value={text}
+          editable={editable}
+          onChangeText={commitText}
+          keyboardType="decimal-pad"
+          placeholder={placeholder}
+          placeholderTextColor={colors.outline}
+          selectTextOnFocus
+          accessibilityLabel={label}
+          style={[
+            styles.stepperValue,
+            compact && styles.stepperValueCompact,
+            { color: colors.onSurface, fontFamily: fontBold },
+          ]}
+          pointerEvents={editable ? 'auto' : 'none'}
+        />
+      </Pressable>
+      <Pressable
+        onPress={() => bump(1)}
+        hitSlop={8}
+        accessibilityRole="button"
+        accessibilityLabel={`${label} +${step}`}
+        style={({ pressed }) => [
+          styles.stepperBtn,
+          compact && styles.stepperBtnCompact,
+          { opacity: pressed ? 0.5 : 1 },
+        ]}
+      >
+        <Ionicons name="add" size={compact ? 15 : 18} color={colors.primary} />
+      </Pressable>
+    </View>
+  );
+}
+
+// ── Modal header ───────────────────────────────────────────────────────────
+
+export interface ModalHeaderProps {
+  title: string;
+  onClose: () => void;
+  closeIcon?: React.ComponentProps<typeof Ionicons>['name'];
+  action?: { title: string; onPress: () => void; disabled?: boolean };
+  /** Pass insets.top from useSafeAreaInsets. */
+  topInset?: number;
+}
+
+export function ModalHeader({ title, onClose, closeIcon = 'close', action, topInset = 0 }: ModalHeaderProps) {
+  const { colors } = useTheme();
+  const { t, fontBold, isRTL } = useTranslation();
+  return (
+    <View
+      style={[
+        styles.modalHeader,
+        { paddingTop: topInset + 8, flexDirection: isRTL ? 'row-reverse' : 'row' },
+      ]}
+    >
+      <IconButton icon={closeIcon} onPress={onClose} label={t('back')} tint={colors.onSurfaceVariant} />
+      <Text
+        numberOfLines={1}
+        accessibilityRole="header"
+        style={[styles.modalHeaderTitle, { color: colors.onSurface, fontFamily: fontBold }]}
+      >
+        {title}
+      </Text>
+      {action ? (
+        <PillButton
+          title={action.title}
+          onPress={action.onPress}
+          disabled={action.disabled}
+          size="sm"
+        />
+      ) : (
+        <View style={{ width: 36 }} />
+      )}
+    </View>
+  );
+}
+
 // ── Stat tile ──────────────────────────────────────────────────────────────
 
 export interface StatTileProps {
@@ -448,6 +679,8 @@ export function GradientFAB({ onPress, icon = 'add', size = 60, label }: Gradien
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
         onPress();
       }}
+      accessibilityRole="button"
+      accessibilityLabel={label}
       style={{ alignItems: 'center' }}
     >
       <Animated.View
@@ -645,5 +878,38 @@ const styles = StyleSheet.create({
     paddingVertical: 3,
     borderRadius: tokens.radius.pill,
     alignSelf: 'flex-start',
+  },
+  stepper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: tokens.radius.md,
+    overflow: 'hidden',
+    minHeight: 40,
+  },
+  stepperBtn: {
+    width: 34,
+    alignSelf: 'stretch',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  stepperBtnCompact: { width: 24 },
+  stepperValue: {
+    textAlign: 'center',
+    fontSize: 17,
+    paddingVertical: 8,
+    paddingHorizontal: 0,
+  },
+  stepperValueCompact: { fontSize: 16, paddingVertical: 7 },
+  modalHeader: {
+    alignItems: 'center',
+    gap: 12,
+    paddingHorizontal: tokens.spacing.lg,
+    paddingBottom: tokens.spacing.md,
+  },
+  modalHeaderTitle: {
+    flex: 1,
+    fontSize: tokens.type.title3,
+    letterSpacing: -0.3,
+    textAlign: 'center',
   },
 });

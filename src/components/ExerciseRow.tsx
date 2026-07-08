@@ -185,9 +185,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   exerciseMeta: {
-    fontSize: 10,
-    textTransform: 'uppercase',
-    letterSpacing: 2,
+    fontSize: 12,
     marginTop: 2,
   },
   actionBtn: {

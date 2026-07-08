@@ -147,7 +147,6 @@ export default function TabsLayout() {
         <Tabs.Screen name="library" />
         <Tabs.Screen name="history" />
         <Tabs.Screen name="settings" />
-        <Tabs.Screen name="workout" options={{ href: null }} />
       </Tabs>
 
       {showNowTrainingBar && (
@@ -195,7 +194,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
   },
   tabButton: { flex: 1, height: TAB_BAR_HEIGHT, alignItems: 'center', justifyContent: 'center', gap: 2 },
-  tabLabel: { fontSize: 10, letterSpacing: 0.4 },
+  tabLabel: { fontSize: 11, letterSpacing: 0.4 },
   fabSlot: { width: 72 },
   fabOverlay: { position: 'absolute', left: 0, right: 0, alignItems: 'center' },
   nowTraining: {
