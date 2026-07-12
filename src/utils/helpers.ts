@@ -12,6 +12,18 @@ export function getExerciseName(
   return t(exercise.nameKey as any);
 }
 
+/**
+ * YYYY-MM-DD in the user's LOCAL timezone.
+ * `toISOString().split('T')[0]` is UTC and shifts the date for anyone east of
+ * Greenwich training before local-midnight-UTC — use this instead.
+ */
+export function localISODate(d: Date = new Date()): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
 export function formatDuration(minutes: number): string {
   if (minutes < 60) return `${minutes}`;
   const h = Math.floor(minutes / 60);

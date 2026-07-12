@@ -30,6 +30,8 @@ import {
 } from '../../src/components/ios';
 import Constants from 'expo-constants';
 import { isHealthKitSupported } from '../../src/utils/health';
+import { accentColors } from '../../src/theme/colors';
+import { formatWeight, fromDisplayWeight, toDisplayWeight, weightUnitLabel } from '../../src/utils/units';
 
 type ThemeOption = 'dark' | 'light' | 'system';
 type AccentOption = 'green' | 'purple' | 'orange';
@@ -73,10 +75,11 @@ export default function ProfileScreen() {
     const handleAddWeight = useCallback(() => {
         const v = parseFloat(bwInput.replace(',', '.'));
         if (!isFinite(v) || v <= 0) return;
-        addBodyWeight(v);
+        // Input arrives in the user's display unit; storage stays kg.
+        addBodyWeight(fromDisplayWeight(v, units));
         setBwInput('');
         setBwOpen(false);
-    }, [bwInput, addBodyWeight]);
+    }, [bwInput, addBodyWeight, units]);
 
     return (
         <ScreenBackground style={{ flex: 1 }}>
@@ -98,8 +101,8 @@ export default function ProfileScreen() {
                         <StatTile label={t('total_workouts')} value={String(sessions.length)} icon="trophy" />
                         <StatTile
                             label={t('body_weight')}
-                            value={lastBw ? `${lastBw.weightKg}` : '—'}
-                            caption={lastBw ? t('weight_kg_short') : undefined}
+                            value={lastBw ? `${toDisplayWeight(lastBw.weightKg, units)}` : '—'}
+                            caption={lastBw ? weightUnitLabel(units) : undefined}
                             icon="body"
                             tint={colors.secondary}
                             onPress={() => setBwOpen(true)}
@@ -166,9 +169,9 @@ export default function ProfileScreen() {
                 <View style={{ flexDirection: 'row', gap: 12 }}>
                     {(['green', 'purple', 'orange'] as AccentOption[]).map((acc) => {
                         const previews: Record<AccentOption, string> = {
-                            green: '#32D74B',
-                            purple: '#BF5AF2',
-                            orange: '#FF9F0A',
+                            green: accentColors.green[isDark ? 'dark' : 'light'].primary,
+                            purple: accentColors.purple[isDark ? 'dark' : 'light'].primary,
+                            orange: accentColors.orange[isDark ? 'dark' : 'light'].primary,
                         };
                         const active = accentColor === acc;
                         return (
@@ -310,7 +313,7 @@ export default function ProfileScreen() {
                             {bodyWeightLog.slice(0, 10).map((e, i, arr) => (
                                 <ListRow
                                     key={e.id}
-                                    title={`${e.weightKg} ${t('weight_kg_short')}`}
+                                    title={formatWeight(e.weightKg, units)}
                                     subtitle={e.date}
                                     separator={i < arr.length - 1}
                                     rightAccessory={

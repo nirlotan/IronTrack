@@ -241,7 +241,15 @@ export function computeMuscleBalance(
   return normalized;
 }
 
-/** Sessions count grouped by ISO date within the last N days. */
+/** YYYY-MM-DD in local time — session dates are local-day keyed. */
+function localDateKey(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+/** Sessions count grouped by local date within the last N days (today inclusive). */
 export function sessionsPerDay(sessions: WorkoutSession[], days = 30): Array<{ date: string; count: number; volume: number }> {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -257,7 +265,7 @@ export function sessionsPerDay(sessions: WorkoutSession[], days = 30): Array<{ d
   for (let i = days - 1; i >= 0; i--) {
     const d = new Date(today);
     d.setDate(today.getDate() - i);
-    const iso = d.toISOString().split('T')[0];
+    const iso = localDateKey(d);
     const stat = byDate.get(iso) ?? { count: 0, volume: 0 };
     out.push({ date: iso, ...stat });
   }

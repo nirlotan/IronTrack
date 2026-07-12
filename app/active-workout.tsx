@@ -33,7 +33,10 @@ import Animated, {
     FadeInDown,
     FadeOut,
     useAnimatedProps,
+    useAnimatedStyle,
     useSharedValue,
+    withSequence,
+    withSpring,
     withTiming,
     Easing,
     type SharedValue,
@@ -44,6 +47,17 @@ import { useTheme, ScreenBackground, tokens } from '../src/theme';
 import { useTranslation } from '../src/i18n';
 import { useAppStore } from '../src/store/appStore';
 import { formatTimer, getExerciseName } from '../src/utils/helpers';
+import {
+    computePlates,
+    formatWeight,
+    formatWeightCompact,
+    fromDisplayWeight,
+    plateSetup,
+    toDisplayWeight,
+    weightStep,
+    weightUnitLabel,
+} from '../src/utils/units';
+import type { Units } from '../src/store/appStore';
 import {
     Card,
     PillButton,
@@ -81,6 +95,8 @@ export default function ActiveWorkoutScreen() {
     const sessions = useAppStore((s) => s.sessions);
     const restTimerSeconds = useAppStore((s) => s.restTimerSeconds);
     const autoStartRestTimer = useAppStore((s) => s.autoStartRestTimer);
+    const units = useAppStore((s) => s.units);
+    const unit = weightUnitLabel(units);
 
     const renameActiveWorkout = useAppStore((s) => s.renameActiveWorkout);
     const updateSet = useAppStore((s) => s.updateSet);
@@ -219,10 +235,15 @@ export default function ActiveWorkoutScreen() {
 
     const handleFinish = useCallback(() => {
         const onConfirm = () => {
+            const sessionId = useAppStore.getState().activeWorkout?.id;
             finishWorkout();
             stopRest();
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-            router.replace('/(tabs)');
+            if (sessionId) {
+                router.replace(`/workout-summary?id=${sessionId}` as any);
+            } else {
+                router.replace('/(tabs)');
+            }
         };
         if (Platform.OS === 'web') return onConfirm();
         Alert.alert(t('finish_workout'), '', [
@@ -278,7 +299,7 @@ export default function ActiveWorkoutScreen() {
                             {formatTimer(elapsed)}
                         </Text>
                         <Text style={[styles.headerSub, { color: colors.onSurfaceVariant, fontFamily: fontRegular }]}>
-                            {completedSets}/{totalSets} {t('sets').toLowerCase()} · {Math.round(liveVolume)}kg
+                            {completedSets}/{totalSets} {t('sets').toLowerCase()} · {formatWeightCompact(liveVolume, units)} {unit}
                         </Text>
                     </View>
                     <Pressable
@@ -384,7 +405,7 @@ export default function ActiveWorkoutScreen() {
                                             />
                                         </View>
                                         {prevRecord ? (
-                                            <Badge label={`PR ${prevRecord.bestWeight}kg`} color={colors.tertiary} />
+                                            <Badge label={`PR ${formatWeight(prevRecord.bestWeight, units)}`} color={colors.tertiary} />
                                         ) : null}
                                     </View>
 
@@ -409,8 +430,8 @@ export default function ActiveWorkoutScreen() {
                                                     : sg.reason === 'hold'
                                                         ? t('suggestion_hold')
                                                         : sg.reason === 'increase_weight'
-                                                            ? `${t('suggestion_increase_weight')}  ${sg.weight}kg × ${sg.reps}`
-                                                            : `${t('suggestion_increase_reps')}  ${sg.weight}kg × ${sg.reps}`}
+                                                            ? `${t('suggestion_increase_weight')}  ${formatWeight(sg.weight, units)} × ${sg.reps}`
+                                                            : `${t('suggestion_increase_reps')}  ${formatWeight(sg.weight, units)} × ${sg.reps}`}
                                             </Text>
                                         </View>
                                     ) : null}
@@ -418,7 +439,7 @@ export default function ActiveWorkoutScreen() {
                                     {/* Column header */}
                                     <View style={{ flexDirection: isRTL ? 'row-reverse' : 'row', alignItems: 'center', paddingHorizontal: 4, marginBottom: 6 }}>
                                         <Text style={[styles.colHead, { color: colors.outline, fontFamily: fontBold, width: 30 }]}>#</Text>
-                                        <Text style={[styles.colHead, { color: colors.outline, fontFamily: fontBold, flex: 1, textAlign: 'center' }]}>{t('weight_kg')}</Text>
+                                        <Text style={[styles.colHead, { color: colors.outline, fontFamily: fontBold, flex: 1, textAlign: 'center' }]}>{`${t('weight_label')} (${unit})`}</Text>
                                         <Text style={[styles.colHead, { color: colors.outline, fontFamily: fontBold, flex: 1, textAlign: 'center' }]}>{t('reps')}</Text>
                                         <Text style={[styles.colHead, { color: colors.outline, fontFamily: fontBold, width: 50, textAlign: 'center' }]}>{t('rpe')}</Text>
                                         <View style={{ width: 40 }} />
@@ -479,7 +500,7 @@ export default function ActiveWorkoutScreen() {
                         <Text style={{ color: colors.onSurfaceVariant, fontFamily: fontBold, fontSize: 11, letterSpacing: 0.6, textTransform: 'uppercase' }}>
                             {t('rest_timer')}
                         </Text>
-                        <Text style={{ color: colors.onSurface, fontFamily: fontBold, fontSize: 28 }}>
+                        <Text style={{ color: colors.onSurface, fontFamily: fontBold, fontSize: 28, fontVariant: ['tabular-nums'], letterSpacing: -0.5 }}>
                             {formatTimer(restLeft)}
                         </Text>
                     </View>
@@ -610,9 +631,9 @@ export default function ActiveWorkoutScreen() {
                             {t('plate_calculator')}
                         </Text>
                         <Text style={{ color: colors.onSurfaceVariant, fontFamily: fontRegular, fontSize: 13, marginBottom: 16 }}>
-                            {plateSheet?.weight ?? 0}kg · {t('per_side')}
+                            {formatWeight(plateSheet?.weight ?? 0, units)} · {t('per_side')}
                         </Text>
-                        {plateSheet ? <PlateBreakdown weight={plateSheet.weight} /> : null}
+                        {plateSheet ? <PlateBreakdown weight={plateSheet.weight} units={units} /> : null}
                     </Pressable>
                 </Pressable>
             </Modal>
@@ -648,8 +669,21 @@ function SetRow({
 }) {
     const { colors } = useTheme();
     const { fontBold, t } = useTranslation();
+    const units = useAppStore((s) => s.units);
     const setType: SetType = set.setType ?? 'working';
     const typeMeta = SET_TYPES.find((s) => s.value === setType)!;
+
+    // Spring pop when a set flips to completed.
+    const checkScale = useSharedValue(1);
+    useEffect(() => {
+        if (set.isCompleted) {
+            checkScale.value = withSequence(
+                withSpring(1.22, { damping: 10, stiffness: 300 }),
+                withSpring(1, { damping: 14, stiffness: 240 })
+            );
+        }
+    }, [set.isCompleted]);
+    const checkStyle = useAnimatedStyle(() => ({ transform: [{ scale: checkScale.value }] }));
 
     const renderRight = () => (
         <RectButton
@@ -688,12 +722,12 @@ function SetRow({
                     <Text style={{ color: colors.onSurfaceVariant, fontFamily: fontBold, fontSize: 10 }}>{setIdx + 1}</Text>
                 </Pressable>
                 <Stepper
-                    value={set.weight}
-                    onChange={onChangeWeight}
-                    step={2.5}
+                    value={set.weight != null ? toDisplayWeight(set.weight, units) : null}
+                    onChange={(v) => onChangeWeight(v != null ? fromDisplayWeight(v, units) : null)}
+                    step={weightStep(units)}
                     min={0}
                     compact
-                    label={t('weight_kg')}
+                    label={`${t('weight_label')} (${weightUnitLabel(units)})`}
                     onLongPressValue={set.weight ? () => onOpenPlate(set.weight!) : undefined}
                     style={{ flex: 1, marginHorizontal: 3, backgroundColor: colors.surface }}
                 />
@@ -723,16 +757,28 @@ function SetRow({
                     accessibilityRole="checkbox"
                     accessibilityLabel={`${t('sets')} ${setIdx + 1}`}
                     accessibilityState={{ checked: set.isCompleted }}
-                    style={{
-                        width: 40,
-                        height: 40,
-                        borderRadius: 12,
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        backgroundColor: set.isCompleted ? colors.primary : colors.surfaceContainerHigh,
-                    }}
                 >
-                    <Ionicons name={set.isCompleted ? 'checkmark' : 'ellipse-outline'} size={20} color={set.isCompleted ? colors.onPrimary : colors.outline} />
+                    <Animated.View
+                        style={[
+                            checkStyle,
+                            {
+                                width: 40,
+                                height: 40,
+                                borderRadius: 12,
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                backgroundColor: set.isCompleted ? colors.primary : colors.surfaceContainerHigh,
+                            },
+                            set.isCompleted && {
+                                shadowColor: colors.primary,
+                                shadowOpacity: 0.4,
+                                shadowRadius: 8,
+                                shadowOffset: { width: 0, height: 2 },
+                            },
+                        ]}
+                    >
+                        <Ionicons name={set.isCompleted ? 'checkmark' : 'ellipse-outline'} size={20} color={set.isCompleted ? colors.onPrimary : colors.outline} />
+                    </Animated.View>
                 </Pressable>
             </View>
         </Swipeable>
@@ -776,22 +822,13 @@ function RestRing({
     );
 }
 
-// ─── Plate breakdown (per side, standard 20kg bar) ────────────────
-function PlateBreakdown({ weight }: { weight: number }) {
+// ─── Plate breakdown (per side, unit-aware bar + plate set) ────────
+function PlateBreakdown({ weight, units }: { weight: number; units: Units }) {
     const { colors } = useTheme();
     const { fontBold, fontRegular, t } = useTranslation();
-    const BAR = 20;
-    const PLATES = [25, 20, 15, 10, 5, 2.5, 1.25];
-    const perSide = Math.max(0, (weight - BAR) / 2);
-    const breakdown: Array<{ plate: number; count: number }> = [];
-    let remaining = perSide;
-    for (const p of PLATES) {
-        const c = Math.floor(remaining / p);
-        if (c > 0) {
-            breakdown.push({ plate: p, count: c });
-            remaining = Math.round((remaining - c * p) * 100) / 100;
-        }
-    }
+    const unit = weightUnitLabel(units);
+    const setup = plateSetup(units);
+    const { breakdown, remainder, perSide } = computePlates(weight, units);
 
     if (perSide <= 0) {
         return (
@@ -817,34 +854,40 @@ function PlateBreakdown({ weight }: { weight: number }) {
                     }}
                 >
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                        <View style={{ width: 24, height: 40, borderRadius: 4, backgroundColor: plateColor(b.plate) }} />
-                        <Text style={{ color: colors.onSurface, fontFamily: fontBold, fontSize: 17 }}>{b.plate}kg</Text>
+                        <View
+                            style={{
+                                width: 24,
+                                // Plate height scales with denomination — reads like a rack.
+                                height: 22 + Math.min(26, (b.plate / setup.plates[0]) * 26),
+                                borderRadius: 4,
+                                backgroundColor: plateColor(b.plate, setup.plates),
+                            }}
+                        />
+                        <Text style={{ color: colors.onSurface, fontFamily: fontBold, fontSize: 17, fontVariant: ['tabular-nums'] }}>
+                            {b.plate}{unit}
+                        </Text>
                     </View>
-                    <Text style={{ color: colors.onSurface, fontFamily: fontBold, fontSize: 17 }}>× {b.count}</Text>
+                    <Text style={{ color: colors.onSurface, fontFamily: fontBold, fontSize: 17, fontVariant: ['tabular-nums'] }}>× {b.count}</Text>
                 </View>
             ))}
-            {remaining > 0.001 ? (
+            {remainder > 0.001 ? (
                 <Text style={{ color: colors.error, fontFamily: fontRegular, fontSize: 12, textAlign: 'center' }}>
-                    {t('plate_remainder')}: {remaining}kg
+                    {t('plate_remainder')}: {remainder}{unit}
                 </Text>
             ) : null}
             <Text style={{ color: colors.onSurfaceVariant, fontFamily: fontRegular, fontSize: 12, textAlign: 'center', marginTop: 4 }}>
-                {t('bar')}: {BAR}kg
+                {t('bar')}: {setup.barDisplay}{unit}
             </Text>
         </View>
     );
 }
 
-function plateColor(p: number): string {
-    switch (p) {
-        case 25: return '#E53E3E';
-        case 20: return '#3182CE';
-        case 15: return '#F6E05E';
-        case 10: return '#48BB78';
-        case 5: return '#A0AEC0';
-        case 2.5: return '#1A202C';
-        default: return '#718096';
-    }
+const PLATE_COLORS = ['#EF4444', '#3B82F6', '#FACC15', '#22C55E', '#94A3B8', '#334155', '#64748B'];
+
+/** Color by position in the plate set (IPF-ish big→small ordering). */
+function plateColor(plate: number, plates: number[]): string {
+    const idx = plates.indexOf(plate);
+    return PLATE_COLORS[idx >= 0 ? idx % PLATE_COLORS.length : PLATE_COLORS.length - 1];
 }
 
 const styles = StyleSheet.create({
@@ -859,7 +902,7 @@ const styles = StyleSheet.create({
     },
     iconBtn: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
     headerCenter: { alignItems: 'center' },
-    elapsed: { fontSize: 17, letterSpacing: 1 },
+    elapsed: { fontSize: 20, letterSpacing: 0.5, fontVariant: ['tabular-nums'] },
     headerSub: { fontSize: 11, marginTop: 1 },
     titleRow: {
         flexDirection: 'row',

@@ -333,6 +333,11 @@ const he: LocaleDefinition<Partial<Record<TranslationKeys, string>>> = {
         ach_early_bird_desc: 'התאמנת לפני השעה 7 בבוקר.',
         ach_night_owl_title: 'ינשוף לילה',
         ach_night_owl_desc: 'התאמנת אחרי השעה 10 בערב.',
+
+        // ── Summary & session detail ───────────────────────────────
+        new_prs: 'שיאים חדשים',
+        weight_label: 'משקל',
+        session_detail: 'פרטי אימון',
     },
 } as const satisfies LocaleDefinition<Partial<Record<TranslationKeys, string>>>;
 export default he;

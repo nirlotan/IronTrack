@@ -5,8 +5,10 @@ import Animated, {
   SlideOutDown,
   useSharedValue,
   withSpring,
+  withRepeat,
+  withSequence,
+  withTiming,
   useAnimatedStyle,
-  useAnimatedProps,
 } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../src/theme';
@@ -14,8 +16,9 @@ import { useTranslation } from '../../src/i18n';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAppStore } from '../../src/store/appStore';
 import { GradientFAB } from '../../src/components/ios';
+import { formatTimer } from '../../src/utils/helpers';
 import * as Haptics from 'expo-haptics';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 
 const TAB_BAR_HEIGHT = 56;
 
@@ -102,6 +105,12 @@ export default function TabsLayout() {
               >
                 <TabIcon focused={focused} icon={tab.icon} iconFocused={tab.iconFocused} color={tint} />
                 <Text style={[styles.tabLabel, { color: tint, fontFamily: fontBold }]}>{t(tab.labelKey as any)}</Text>
+                <View
+                  style={[
+                    styles.tabDot,
+                    { backgroundColor: colors.primary, opacity: focused ? 1 : 0 },
+                  ]}
+                />
               </Pressable>
             );
           };
@@ -163,10 +172,11 @@ export default function TabsLayout() {
           ]}
         >
           <Pressable style={styles.nowTrainingInner} onPress={() => router.push('/active-workout')}>
-            <View style={[styles.pulseDot, { backgroundColor: colors.primary }]} />
+            <PulseDot color={colors.primary} />
             <Text style={[styles.nowTrainingText, { color: colors.onSurface, fontFamily: fontBold }]}>
               {t('now_training')}
             </Text>
+            {activeWorkout?.startedAt ? <ElapsedLabel startedAt={activeWorkout.startedAt} color={colors.onSurfaceVariant} /> : null}
             <View style={{ flex: 1 }} />
             <Text style={[styles.resumeText, { color: colors.primary, fontFamily: fontBold }]}>{t('resume')}</Text>
             <Ionicons name="chevron-forward" size={16} color={colors.primary} />
@@ -174,6 +184,42 @@ export default function TabsLayout() {
         </Animated.View>
       )}
     </>
+  );
+}
+
+/** Softly pulsing live indicator. */
+function PulseDot({ color }: { color: string }) {
+  const scale = useSharedValue(1);
+  useEffect(() => {
+    scale.value = withRepeat(
+      withSequence(
+        withTiming(1.5, { duration: 900 }),
+        withTiming(1, { duration: 900 })
+      ),
+      -1
+    );
+  }, []);
+  const style = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+    opacity: 2 - scale.value,
+  }));
+  return (
+    <View style={{ width: 10, height: 10, alignItems: 'center', justifyContent: 'center' }}>
+      <Animated.View style={[styles.pulseDot, { backgroundColor: color, position: 'absolute' }, style]} />
+      <View style={[styles.pulseDot, { backgroundColor: color }]} />
+    </View>
+  );
+}
+
+/** Ticking mm:ss since workout start. */
+function ElapsedLabel({ startedAt, color }: { startedAt: number; color: string }) {
+  const [elapsed, setElapsed] = useState(() => Math.max(0, Math.floor((Date.now() - startedAt) / 1000)));
+  useEffect(() => {
+    const id = setInterval(() => setElapsed(Math.max(0, Math.floor((Date.now() - startedAt) / 1000))), 1000);
+    return () => clearInterval(id);
+  }, [startedAt]);
+  return (
+    <Text style={{ color, fontSize: 12, fontVariant: ['tabular-nums'] }}>{formatTimer(elapsed)}</Text>
   );
 }
 
@@ -195,6 +241,7 @@ const styles = StyleSheet.create({
   },
   tabButton: { flex: 1, height: TAB_BAR_HEIGHT, alignItems: 'center', justifyContent: 'center', gap: 2 },
   tabLabel: { fontSize: 11, letterSpacing: 0.4 },
+  tabDot: { width: 4, height: 4, borderRadius: 2, marginTop: 1 },
   fabSlot: { width: 72 },
   fabOverlay: { position: 'absolute', left: 0, right: 0, alignItems: 'center' },
   nowTraining: {

@@ -4,6 +4,7 @@ import { defaultExercises } from '../data/exercises';
 import { seedPrograms, seedTemplates } from '../data/programs';
 import { computeNewlyUnlocked } from '../data/achievements';
 import { computePersonalRecords, detectPRKinds } from '../utils/algorithms';
+import { localISODate } from '../utils/helpers';
 import * as Crypto from 'expo-crypto';
 import type { LocaleCode } from '../i18n/locales';
 import { saveStrengthWorkout, initHealthKit } from '../utils/health';
@@ -21,6 +22,7 @@ import type {
   BodyWeightEntry,
   Achievement,
   SetType,
+  TemplateExercise,
 } from '../types';
 
 export type ThemeMode = 'dark' | 'light' | 'system';
@@ -73,6 +75,7 @@ interface AppState {
   addTemplate: (template: WorkoutTemplate) => void;
   updateTemplate: (template: WorkoutTemplate) => void;
   deleteTemplate: (id: string) => void;
+  saveSessionAsTemplate: (sessionId: string, name: string) => WorkoutTemplate | null;
 
   // Programs
   installProgram: (programId: string) => void;
@@ -105,6 +108,7 @@ interface AppState {
   getLastSessionForTemplate: (templateId: string) => WorkoutSession | null;
   hideRecentSession: (id: string) => void;
   deleteSession: (id: string) => void;
+  rateSession: (id: string, rating: number) => void;
 
   // Banners
   dismissPRBanner: () => void;
@@ -255,7 +259,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     if (!isFinite(weightKg) || weightKg <= 0) return;
     const entry: BodyWeightEntry = {
       id: uuid(),
-      date: new Date().toISOString().split('T')[0],
+      date: localISODate(),
       weightKg: Math.round(weightKg * 10) / 10,
     };
     const bodyWeightLog = [entry, ...get().bodyWeightLog];
@@ -341,6 +345,41 @@ export const useAppStore = create<AppState>((set, get) => ({
     const templates = get().templates.filter((t) => t.id !== id);
     set({ templates });
     setJSON(KEYS.templates, templates);
+  },
+
+  saveSessionAsTemplate: (sessionId, name) => {
+    const session = get().sessions.find((s) => s.id === sessionId);
+    if (!session) return null;
+
+    const exercisesForTemplate = session.exercises
+      .map((ex) => {
+        const completedSets = ex.sets.filter((s) => s.isCompleted && s.setType !== 'warmup');
+        if (completedSets.length === 0) return null;
+        const lastSet = completedSets[completedSets.length - 1];
+        return {
+          exerciseId: ex.exerciseId,
+          sets: completedSets.length,
+          reps: lastSet.reps ?? 10,
+          weight: lastSet.weight ?? null,
+        };
+      })
+      .filter((e): e is TemplateExercise => e !== null);
+
+    if (exercisesForTemplate.length === 0) return null;
+
+    const now = Date.now();
+    const template: WorkoutTemplate = {
+      id: `tpl_${uuid()}`,
+      name: name.trim() || session.name || 'Workout',
+      exercises: exercisesForTemplate,
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    const templates = [template, ...get().templates];
+    set({ templates });
+    setJSON(KEYS.templates, templates);
+    return template;
   },
 
   startWorkoutFromTemplate: (templateId) => {
@@ -644,7 +683,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     const session: WorkoutSession = {
       id: aw.id,
       name: aw.name || 'Workout',
-      date: new Date().toISOString().split('T')[0],
+      date: localISODate(),
       startTime,
       endTime,
       templateId: aw.templateId,
@@ -711,6 +750,13 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   deleteSession: (id) => {
     const sessions = get().sessions.filter((s) => s.id !== id);
+    set({ sessions });
+    setJSON(KEYS.sessions, sessions);
+  },
+
+  rateSession: (id, rating) => {
+    const clamped = Math.max(1, Math.min(5, Math.round(rating)));
+    const sessions = get().sessions.map((s) => (s.id === id ? { ...s, rating: clamped } : s));
     set({ sessions });
     setJSON(KEYS.sessions, sessions);
   },

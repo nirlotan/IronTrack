@@ -2,7 +2,7 @@
  * TemplateEditor — shared full-screen editor for creating and editing routines.
  * Wrapped by app/create-template.tsx and app/edit-template.tsx.
  */
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -24,6 +24,7 @@ import { getExerciseName } from '../utils/helpers';
 import { SearchBox } from './SearchBox';
 import { Card, IconButton, ModalHeader, PillButton, SectionHeader, Stepper } from './ios';
 import { bodyPartKeys, bodyPartNameKeys } from '../data/exercises';
+import { fromDisplayWeight, toDisplayWeight, weightStep, weightUnitLabel } from '../utils/units';
 import type { TemplateExercise, WorkoutTemplate } from '../types';
 
 const uuid = () => Crypto.randomUUID();
@@ -36,6 +37,8 @@ export function TemplateEditor({ templateId }: { templateId?: string }) {
 
   const exercises = useAppStore((s) => s.exercises);
   const templates = useAppStore((s) => s.templates);
+  const units = useAppStore((s) => s.units);
+  const weightLabel = `${t('weight_label')} (${weightUnitLabel(units)})`;
   const addTemplate = useAppStore((s) => s.addTemplate);
   const updateTemplate = useAppStore((s) => s.updateTemplate);
 
@@ -121,10 +124,12 @@ export function TemplateEditor({ templateId }: { templateId?: string }) {
     router.back();
   };
 
-  if (isEdit && !template) {
-    router.back();
-    return null;
-  }
+  // Editing a template that no longer exists — leave via effect, not mid-render.
+  useEffect(() => {
+    if (isEdit && !template) router.back();
+  }, [isEdit, template]);
+
+  if (isEdit && !template) return null;
 
   return (
     <ScreenBackground style={{ flex: 1 }}>
@@ -239,14 +244,14 @@ export function TemplateEditor({ templateId }: { templateId?: string }) {
                   </View>
                   <View style={styles.field}>
                     <Text style={[styles.fieldLabel, { color: colors.onSurfaceVariant, fontFamily: fontBold }]}>
-                      {t('weight_kg')}
+                      {weightLabel}
                     </Text>
                     <Stepper
-                      value={te.weight}
-                      onChange={(v) => handleUpdate(idx, 'weight', v)}
-                      step={2.5}
+                      value={te.weight != null ? toDisplayWeight(te.weight, units) : null}
+                      onChange={(v) => handleUpdate(idx, 'weight', v != null ? fromDisplayWeight(v, units) : null)}
+                      step={weightStep(units)}
                       min={0}
-                      label={t('weight_kg')}
+                      label={weightLabel}
                     />
                   </View>
                 </View>

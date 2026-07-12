@@ -333,6 +333,11 @@ const ar: LocaleDefinition<Partial<Record<TranslationKeys, string>>> = {
         ach_early_bird_desc: 'تمرنت قبل السابعة صباحاً.',
         ach_night_owl_title: 'بومة الليل',
         ach_night_owl_desc: 'تمرنت بعد العاشرة مساءً.',
+
+        // ── Summary & session detail ───────────────────────────────
+        new_prs: 'أرقام قياسية جديدة',
+        weight_label: 'الوزن',
+        session_detail: 'تفاصيل التمرين',
     },
 } as const satisfies LocaleDefinition<Partial<Record<TranslationKeys, string>>>;
 

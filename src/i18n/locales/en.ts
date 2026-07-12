@@ -332,6 +332,11 @@ const en = {
         ach_early_bird_desc: 'Trained before 7 AM.',
         ach_night_owl_title: 'Night Owl',
         ach_night_owl_desc: 'Trained after 10 PM.',
+
+        // ── Summary & session detail ───────────────────────────────
+        new_prs: 'New records',
+        weight_label: 'Weight',
+        session_detail: 'Workout details',
     },
 } as const satisfies LocaleDefinition;
 

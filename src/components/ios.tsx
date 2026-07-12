@@ -25,6 +25,7 @@ import {
   Pressable,
   TextInput,
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Circle, Defs, LinearGradient as SvgGradient, Stop } from 'react-native-svg';
 import Animated, {
   useSharedValue,
@@ -47,17 +48,37 @@ export interface CardProps {
   style?: StyleProp<ViewStyle>;
   /** Tighter padding for content-heavy cards */
   compact?: boolean;
+  /** Accent-gradient wash for the one card that owns the screen. */
+  hero?: boolean;
 }
 
-export function Card({ children, style, compact }: CardProps) {
+export function Card({ children, style, compact, hero }: CardProps) {
   const { colors } = useTheme();
+  const padding = compact ? tokens.spacing.md : tokens.spacing.lg;
+  if (hero) {
+    return (
+      <LinearGradient
+        colors={[colors.primaryContainer, colors.surfaceContainer]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 0.9, y: 1 }}
+        style={[
+          styles.card,
+          { padding, borderColor: colors.cardBorder },
+          style,
+        ]}
+      >
+        {children}
+      </LinearGradient>
+    );
+  }
   return (
     <View
       style={[
         styles.card,
         {
           backgroundColor: colors.surfaceContainer,
-          padding: compact ? tokens.spacing.md : tokens.spacing.lg,
+          borderColor: colors.cardBorder,
+          padding,
         },
         style,
       ]}
@@ -260,6 +281,17 @@ export function PillButton({
   } as const;
   const v = variants[variant];
 
+  const glow =
+    variant === 'primary' && !disabled
+      ? {
+          shadowColor: colors.primary,
+          shadowOpacity: 0.35,
+          shadowRadius: 12,
+          shadowOffset: { width: 0, height: 4 },
+          elevation: 6,
+        }
+      : null;
+
   return (
     <Pressable
       disabled={disabled}
@@ -269,6 +301,7 @@ export function PillButton({
       }}
       style={({ pressed }) => [
         styles.pill,
+        glow,
         {
           backgroundColor: v.bg,
           height: heights[size],
@@ -532,19 +565,28 @@ export function StatTile({ label, value, caption, icon, tint, onPress }: StatTil
   const accent = tint ?? colors.primary;
 
   const inner = (
-    <View style={[styles.statTile, { backgroundColor: colors.surfaceContainer }]}>
+    <View style={[styles.statTile, { backgroundColor: colors.surfaceContainer, borderColor: colors.cardBorder }]}>
       <View style={[styles.statHeader, { flexDirection: isRTL ? 'row-reverse' : 'row' }]}>
         <Text style={[styles.statLabel, { color: colors.onSurfaceVariant, fontFamily: fontBold, textAlign: isRTL ? 'right' : 'left' }]}>
           {label}
         </Text>
-        {icon ? <Ionicons name={icon} size={14} color={accent} /> : null}
+        {icon ? (
+          <View style={[styles.statIconChip, { backgroundColor: colors.fillTertiary }]}>
+            <Ionicons name={icon} size={12} color={accent} />
+          </View>
+        ) : null}
       </View>
       <Text
         numberOfLines={1}
         adjustsFontSizeToFit
         style={[
           styles.statValue,
-          { color: colors.onSurface, fontFamily: fontBold, textAlign: isRTL ? 'right' : 'left' },
+          {
+            color: colors.onSurface,
+            fontFamily: fontBold,
+            textAlign: isRTL ? 'right' : 'left',
+            fontVariant: ['tabular-nums'],
+          },
         ]}
       >
         {value}
@@ -798,11 +840,54 @@ export function Badge({ label, color }: { label: string; color?: string }) {
   );
 }
 
+// ── Animated number (count-up) ─────────────────────────────────────────────
+
+export interface AnimatedNumberProps {
+  value: number;
+  /** Formats the in-flight value; defaults to rounded integer. */
+  format?: (v: number) => string;
+  duration?: number;
+  style?: StyleProp<TextStyle>;
+}
+
+/** RAF-driven count-up. Cross-platform (no native text setProps needed). */
+export function AnimatedNumber({ value, format, duration = 700, style }: AnimatedNumberProps) {
+  const [display, setDisplay] = useState(value);
+  const fromRef = React.useRef(0);
+  const rafRef = React.useRef<number | null>(null);
+
+  useEffect(() => {
+    const from = fromRef.current;
+    const start = Date.now();
+    const tick = () => {
+      const t = Math.min(1, (Date.now() - start) / duration);
+      // Strong ease-out
+      const eased = 1 - Math.pow(1 - t, 3);
+      const v = from + (value - from) * eased;
+      setDisplay(v);
+      if (t < 1) rafRef.current = requestAnimationFrame(tick);
+      else fromRef.current = value;
+    };
+    rafRef.current = requestAnimationFrame(tick);
+    return () => {
+      if (rafRef.current != null) cancelAnimationFrame(rafRef.current);
+      fromRef.current = value;
+    };
+  }, [value, duration]);
+
+  return (
+    <Text style={[{ fontVariant: ['tabular-nums'] }, style]} numberOfLines={1}>
+      {format ? format(display) : String(Math.round(display))}
+    </Text>
+  );
+}
+
 // ── Styles ─────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
   card: {
-    borderRadius: tokens.radius.lg,
+    borderRadius: tokens.radius.xl,
+    borderWidth: StyleSheet.hairlineWidth,
     overflow: 'hidden',
   },
   row: {
@@ -840,15 +925,23 @@ const styles = StyleSheet.create({
   },
   pillLabel: { letterSpacing: 0.2 },
   statTile: {
-    borderRadius: tokens.radius.lg,
+    borderRadius: tokens.radius.xl,
+    borderWidth: StyleSheet.hairlineWidth,
     padding: tokens.spacing.lg,
     flex: 1,
-    minHeight: 96,
+    minHeight: 100,
     justifyContent: 'space-between',
   },
   statHeader: { alignItems: 'center', justifyContent: 'space-between' },
-  statLabel: { fontSize: 11, letterSpacing: 0.8, textTransform: 'uppercase' },
-  statValue: { fontSize: 28, letterSpacing: -0.5, marginTop: 6 },
+  statLabel: { fontSize: 11, letterSpacing: 0.8, textTransform: 'uppercase', flexShrink: 1 },
+  statIconChip: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  statValue: { fontSize: 30, letterSpacing: -0.8, marginTop: 6 },
   statCaption: { fontSize: 12 },
   fab: {
     alignItems: 'center',

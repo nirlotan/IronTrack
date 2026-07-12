@@ -332,6 +332,11 @@ const es = {
         ach_early_bird_desc: 'Entrenaste antes de las 7 AM.',
         ach_night_owl_title: 'Búho nocturno',
         ach_night_owl_desc: 'Entrenaste después de las 10 PM.',
+
+        // ── Summary & session detail ───────────────────────────────
+        new_prs: 'Nuevos récords',
+        weight_label: 'Peso',
+        session_detail: 'Detalles del entreno',
     },
 } as const satisfies LocaleDefinition;
 

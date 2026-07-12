@@ -333,6 +333,11 @@ const pl: LocaleDefinition<Partial<Record<TranslationKeys, string>>> = {
         ach_early_bird_desc: 'Trening przed 7 rano.',
         ach_night_owl_title: 'Nocny marek',
         ach_night_owl_desc: 'Trening po 22:00.',
+
+        // ── Summary & session detail ───────────────────────────────
+        new_prs: 'Nowe rekordy',
+        weight_label: 'Ciężar',
+        session_detail: 'Szczegóły treningu',
     },
 } as const satisfies LocaleDefinition<Partial<Record<TranslationKeys, string>>>;
 

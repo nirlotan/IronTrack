@@ -67,6 +67,24 @@ function InnerLayout() {
             headerShown: false,
           }}
         />
+        <Stack.Screen
+          name="workout-summary"
+          options={{
+            presentation: 'fullScreenModal',
+            animation: 'fade',
+            gestureEnabled: false,
+            headerShown: false,
+          }}
+        />
+        <Stack.Screen
+          name="session-detail"
+          options={{
+            presentation: 'fullScreenModal',
+            animation: 'slide_from_bottom',
+            gestureEnabled: false,
+            headerShown: false,
+          }}
+        />
       </Stack>
     </>
   );

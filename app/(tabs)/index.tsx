@@ -37,7 +37,8 @@ import {
     Badge,
 } from '../../src/components/ios';
 import { computeMuscleBalance, computeStreak, suggestProgression } from '../../src/utils/algorithms';
-import { getExerciseName, formatVolume } from '../../src/utils/helpers';
+import { getExerciseName } from '../../src/utils/helpers';
+import { formatWeight, formatWeightCompact, weightUnitLabel } from '../../src/utils/units';
 import { bodyPartKeys, bodyPartNameKeys } from '../../src/data/exercises';
 import { achievements as achievementCatalog } from '../../src/data/achievements';
 
@@ -66,6 +67,7 @@ export default function TodayScreen() {
     const templates = useAppStore((s) => s.templates);
     const exercises = useAppStore((s) => s.exercises);
     const weeklyGoal = useAppStore((s) => s.weeklyGoal);
+    const units = useAppStore((s) => s.units);
     const unlockedAchievements = useAppStore((s) => s.unlockedAchievements);
     const recentlyUnlocked = useAppStore((s) => s.recentlyUnlockedAchievements);
     const recentPRBanner = useAppStore((s) => s.recentPRBanner);
@@ -73,7 +75,6 @@ export default function TodayScreen() {
     const dismissAchievementBanner = useAppStore((s) => s.dismissAchievementBanner);
     const startEmptyWorkout = useAppStore((s) => s.startEmptyWorkout);
     const startWorkoutFromTemplate = useAppStore((s) => s.startWorkoutFromTemplate);
-    const startWorkoutFromSession = useAppStore((s) => s.startWorkoutFromSession);
 
     const weekly = useMemo(() => workoutsThisWeek(sessions), [sessions]);
     const streak = useMemo(() => computeStreak(sessions), [sessions]);
@@ -164,13 +165,12 @@ export default function TodayScreen() {
         [startWorkoutFromTemplate, router]
     );
 
-    const handleRepeat = useCallback(
+    const handleOpenSession = useCallback(
         (id: string) => {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            startWorkoutFromSession(id);
-            router.push('/active-workout');
+            Haptics.selectionAsync();
+            router.push(`/session-detail?id=${id}` as any);
         },
-        [startWorkoutFromSession, router]
+        [router]
     );
 
     const handleEmpty = useCallback(() => {
@@ -238,7 +238,7 @@ export default function TodayScreen() {
 
                 {/* ── Hero stats: weekly goal + streak ────────────────────── */}
                 <Animated.View entering={FadeInDown.delay(60).springify()}>
-                    <Card style={{ flexDirection: isRTL ? 'row-reverse' : 'row', alignItems: 'center', gap: tokens.spacing.lg }}>
+                    <Card hero style={{ flexDirection: isRTL ? 'row-reverse' : 'row', alignItems: 'center', gap: tokens.spacing.lg }}>
                         <ProgressRing
                             progress={goalProgress}
                             size={104}
@@ -338,7 +338,7 @@ export default function TodayScreen() {
                                                 ? t('suggestion_increase_reps')
                                                 : t('suggestion_hold')
                                     }
-                                    value={`${s.suggestion?.weight}${'kg'} × ${s.suggestion?.reps}`}
+                                    value={`${formatWeight(s.suggestion?.weight ?? 0, units)} × ${s.suggestion?.reps}`}
                                     separator={i < suggestions.length - 1}
                                     leading={
                                         <View style={[styles.suggestIcon, { backgroundColor: colors.primaryContainer }]}>
@@ -400,10 +400,10 @@ export default function TodayScreen() {
                                 <ListRow
                                     key={s.id}
                                     title={s.name}
-                                    subtitle={`${s.date} · ${s.durationMinutes ?? 0}${t('minutes')}`}
-                                    value={`${formatVolume(s.totalVolume ?? 0)}kg`}
+                                    subtitle={`${s.date} · ${s.durationMinutes ?? 0} ${t('minutes')}`}
+                                    value={`${formatWeightCompact(s.totalVolume ?? 0, units)} ${weightUnitLabel(units)}`}
                                     separator={i < recentSessions.length - 1}
-                                    onPress={() => handleRepeat(s.id)}
+                                    onPress={() => handleOpenSession(s.id)}
                                     chevron
                                 />
                             ))}

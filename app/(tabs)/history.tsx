@@ -14,7 +14,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import Animated, { FadeInDown } from 'react-native-reanimated';
-import Svg, { Path, Circle, Line as SvgLine } from 'react-native-svg';
+import Svg, { Path, Circle, Defs, LinearGradient as SvgGradient, Stop } from 'react-native-svg';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme, ScreenBackground, tokens } from '../../src/theme';
 import { useTranslation } from '../../src/i18n';
@@ -33,7 +33,8 @@ import {
   computeStreak,
 } from '../../src/utils/algorithms';
 import { achievements as achievementCatalog } from '../../src/data/achievements';
-import { getExerciseName, formatVolume } from '../../src/utils/helpers';
+import { getExerciseName } from '../../src/utils/helpers';
+import { formatWeight, formatWeightCompact, weightUnitLabel } from '../../src/utils/units';
 
 type Range = '30' | '90' | '365' | 'all';
 
@@ -46,8 +47,8 @@ export default function InsightsScreen() {
 
   const sessions = useAppStore((s) => s.sessions);
   const exercises = useAppStore((s) => s.exercises);
+  const units = useAppStore((s) => s.units);
   const unlockedAchievements = useAppStore((s) => s.unlockedAchievements);
-  const startWorkoutFromSession = useAppStore((s) => s.startWorkoutFromSession);
   const deleteSession = useAppStore((s) => s.deleteSession);
 
   const records = useMemo(() => computePersonalRecords(sessions), [sessions]);
@@ -81,12 +82,11 @@ export default function InsightsScreen() {
     [deleteSession, t]
   );
 
-  const handleRepeat = useCallback(
+  const handleOpenSession = useCallback(
     (id: string) => {
-      startWorkoutFromSession(id);
-      router.push('/active-workout');
+      router.push(`/session-detail?id=${id}` as any);
     },
-    [startWorkoutFromSession, router]
+    [router]
   );
 
   return (
@@ -112,14 +112,14 @@ export default function InsightsScreen() {
           />
           <StatTile
             label={t('total_lifetime_volume')}
-            value={`${formatVolume(totals.totalVolume)}kg`}
+            value={`${formatWeightCompact(totals.totalVolume, units)} ${weightUnitLabel(units)}`}
             icon="barbell"
           />
         </View>
         <View style={{ flexDirection: 'row', gap: tokens.spacing.md }}>
           <StatTile
             label={t('avg_duration')}
-            value={`${totals.avgDuration}${t('minutes')}`}
+            value={`${totals.avgDuration} ${t('minutes')}`}
             icon="time"
           />
           <StatTile
@@ -170,14 +170,14 @@ export default function InsightsScreen() {
                 <ListRow
                   key={r.exerciseId}
                   title={ex ? getExerciseName(ex, t, language) : r.exerciseId}
-                  subtitle={`${t('estimated_1rm')}: ${r.estimated1RM}kg · ${r.bestWeight}kg × ${r.bestReps}`}
+                  subtitle={`${t('estimated_1rm')}: ${formatWeight(r.estimated1RM, units)} · ${formatWeight(r.bestWeight, units)} × ${r.bestReps}`}
                   separator={i < recordList.length - 1}
                   leading={
                     <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: colors.primaryContainer, alignItems: 'center', justifyContent: 'center' }}>
                       <Text style={{ fontSize: 16 }}>🥇</Text>
                     </View>
                   }
-                  value={`${r.bestWeight}kg`}
+                  value={formatWeight(r.bestWeight, units)}
                 />
               );
             })
@@ -236,10 +236,10 @@ export default function InsightsScreen() {
                 <ListRow
                   key={s.id}
                   title={s.name}
-                  subtitle={`${s.date} · ${s.durationMinutes ?? 0}${t('minutes')}`}
-                  value={`${formatVolume(s.totalVolume ?? 0)}kg`}
+                  subtitle={`${s.date} · ${s.durationMinutes ?? 0} ${t('minutes')}`}
+                  value={`${formatWeightCompact(s.totalVolume ?? 0, units)} ${weightUnitLabel(units)}`}
                   separator={i < Math.min(7, sessions.length - 1)}
-                  onPress={() => handleRepeat(s.id)}
+                  onPress={() => handleOpenSession(s.id)}
                   rightAccessory={
                     <Pressable onPress={() => handleDelete(s.id)} hitSlop={10} style={{ padding: 4 }}>
                       <Ionicons name="trash-outline" size={16} color={colors.outline} />
@@ -279,7 +279,13 @@ function VolumeChart({ data }: { data: Array<{ date: string; count: number; volu
   return (
     <View style={{ alignItems: 'center' }}>
       <Svg width={width} height={height}>
-        <Path d={areaPath} fill={colors.primary} fillOpacity={0.12} />
+        <Defs>
+          <SvgGradient id="volGrad" x1="0" y1="0" x2="0" y2="1">
+            <Stop offset="0" stopColor={colors.primary} stopOpacity="0.32" />
+            <Stop offset="1" stopColor={colors.primary} stopOpacity="0.02" />
+          </SvgGradient>
+        </Defs>
+        <Path d={areaPath} fill="url(#volGrad)" />
         <Path d={linePath} stroke={colors.primary} strokeWidth={2.5} fill="none" strokeLinecap="round" strokeLinejoin="round" />
         {data.map((d, i) => {
           if (d.volume === 0) return null;
